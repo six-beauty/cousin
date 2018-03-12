@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Captcha</title>
+
+    <link rel="shortcut icon" href="/static/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href=" {{ url_for('static', filename='styles/reset.css') }} ">
+    <link rel="stylesheet" href=" {{ url_for('static', filename='styles/essential.css') }} ">
+    <link rel="stylesheet" href=" {{ url_for('static', filename='styles/homepage.css') }} ">
+    <!-- <script src="script.js"></script> -->
+</head>
+<body>
+    <main>
+        <a href="http://120.24.59.86:9902/" target="_blank">
+            <img src="static/captcha.png" alt="豆瓣验证码校验"/>
+        </a> 
+        <div><b>tomato<sup>w</sup></b>&#8203;<sub>(pre-alpha)</sub></div>
+        <form action="/captcha" method="get" autocomplete="off" role="search">
+            <input type="search" name="search" placeholder="Verify The Captcha" autofocus>
+        </form>
+    </main>
+</body>
+</html>
