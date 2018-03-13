@@ -70,7 +70,7 @@ emoji_re = re.compile(u'('
         re.UNICODE)
 
 #self answer mail
-self_mail = [122619569, 54451019, 174089125]
+self_mail = [122619569, 54451019]
 #self topics不回复
 my_topics = [106547648,111516608, 112933822, 112932149, 112933816, 112933934, 113515127, 113515502]
 #ignore topics
