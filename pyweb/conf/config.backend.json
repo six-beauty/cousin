@@ -1,0 +1,8 @@
+{
+ 	"redis":{"host":"127.0.0.1", "port":32000, "pw":"fish3d"},
+ 	"mysql":{"host":"127.0.0.1", "port":3306, "user":"fish3d", "pw":"#ligang213$", "db":"db_test"},
+	"gamelog":{"path":"./../../crash_report"},
+    "mail":{"from_addr":"sanyue9394@126.com", "from_passwd":"sanyue214008", "to_addr":["939445950@qq.com,864173107@qq.com"], "from_svr":"smtp.126.com", "svr_port":25},
+    "log":"../log",
+	"res":{"path":"./../doc/res"}
+}

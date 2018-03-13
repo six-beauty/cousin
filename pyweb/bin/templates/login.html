@@ -1,0 +1,88 @@
+$def with(err_msg)
+
+<form name="main" method="post">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="X-UA-Compatible" content="ie=edge">
+        <title></title>
+        <style>
+body {
+    font-family: "Helvetica Neue", Helvetica, "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Source Han Sans CN", "Microsoft YaHei", "Apple Color Emoji", "Segoe UI Symbol", Arial, sans-serif;
+    font-style: normal;
+    color: #333;
+    font-size: 14px;
+}
+
+    .wrapper {
+        max-width: 750px;
+        margin: 0 auto;
+        padding: 8px;
+    }
+
+    .container {
+        border-radius: 4px;
+        padding: 8px 16px;
+        -webkit-box-shadow: 0 2px 4px #6c6d6f;
+        -moz-box-shadow: 0 2px 4px #6c6d6f;
+        box-shadow: 0 2px 4px #6c6d6f;
+    }
+
+    .h3,
+    h3 {
+        font-size: 24px;
+    }
+
+    .h1,
+    .h2,
+    .h3,
+    h1,
+    h2,
+    h3 {
+        margin-top: 20px;
+        margin-bottom: 10px;
+    }
+
+    .page-date {
+        color: #6c6d6f;
+    }
+
+    .page-title {
+        color: rgb(142, 201, 101);
+        font-weight: 700;
+        font-style: italic;
+        text-indent: 1em;
+    }
+
+    .input-item input {
+        border: none;
+    }
+
+        </style>
+    </head>
+    <body>
+        <section class="wrapper">
+            <section class="container">
+                <header class="page-head">
+                    <h3>login:登录</h3><h4>${err_msg}</h4>
+                </header>
+                <main>
+
+                <div class="input-item">
+                    <label for="name">账号:</label>
+                    <input id="name" type="text" name="admin" placeholder="账号">
+                </div>
+                <div class="input-item">
+                    <label for="name">密码:</label>
+                    <input id="name" type="text" name="passwd" placeholder="密码">
+                </div>
+
+                <p>向东农场欢迎您的加入</p>
+                <div>
+                    <input type="submit" class="input-submit" value="登陆">
+                </div>
+                </main>
+            </section>
+        </section>
+    </body>
+</form>

@@ -1,0 +1,231 @@
+<form name="main" method="post">
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+        <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport" />
+        <title>手机预约界面</title>
+        <meta name="viewport"
+              content="height = [pixel_value | device-height],width = [pixel_value | device-width ] ,
+              initial-scale = 1 , minimum-scale = 1 , maximum-scale = 1 , 
+              user-scalable = [yes | no] , target-densitydpi = [dpi_value | device-dpi | high-dpi | medium-dpi | low-dpi]" />
+
+        <script type="text/javascript">
+
+
+
+//--------------------------------------------------------------------------------------------------------------
+
+//输入中文时自动替换成空
+function check(str){ 
+    var temp="" 
+        for(var i=0;i<str.length;i++) 
+            if(str.charCodeAt(i)>0&&str.charCodeAt(i)<255) 
+                temp+=str.charAt(i) 
+                    return temp;
+
+}
+
+function addDateOption(){
+    //根据id查找对象
+    var obj=document.getElementById('date');
+    var w_array=new Array("星期天","星期一","星期二","星期三","星期四","星期五","星期六");
+    for(var i=0;i<30;i++){
+
+        var d = new Date();
+        d.setDate(d.getDate()+i)
+            var year = d.getFullYear();
+        var h=d.getHours();        //小时
+        var mins=d.getMinutes();   //分
+        var s=d.getSeconds();      //秒
+        var date = d.getDate();
+        var month = d.getMonth()+1;
+        var date = d.getDate();
+        var week = d.getDay();
+        /*if(month<10) month="0" + month;
+          if(date<10) month="0" + date;
+          if(h<10) h="0" + h;
+          if(mins<10) mins="0" + mins;
+          if(s<10) s="0" + s; */
+        //添加option选项
+        obj.options.add(new Option(year+"-"+month+"-"+date+"     "+w_array[week],year+"-"+month+"-"+date+w_array[week]));
+    } 
+}
+function addTimeOption(){
+    //根据id查找对象
+    var obj=document.getElementById('time');
+    var hour = 8;
+    var min = 0;
+    var b = 1;
+    for(var i=0;i<30;i++){
+        min = i*30 ;
+        var n = min/30;
+        if(n%2==0){
+            min = 00;
+            hour = parseInt(hour)+1;
+        }else{
+            min = 30;
+        }
+        if(min<10){
+            min = "0"+min;
+        }
+        if(hour<10){
+            hour = parseInt("0"+hour);
+        }
+        //添加option选项
+        obj.options.add(new Option(hour+":"+min,hour+":"+min));
+    } 
+}
+function addNumOption(){
+    //根据id查找对象
+    var obj=document.getElementById('num');
+    var num = 0;
+    for(var i=1;i<31;i++){
+        num = i;
+
+        //添加option选项
+        obj.options.add(new Option(num+"人",num));
+    } 
+}
+
+        </script>
+
+
+
+    <style type="text/css">
+*{margin:0 ;padding:0}
+.suofang {MARGIN: auto;WIDTH: 100px;}
+.suofang img{MAX-WIDTH: 100%!important;HEIGHT: auto!important;width:expression(this.width > 100 ? "100px" : this.width)!important;}
+
+::-webkit-input-placeholder { /* WebKit browsers */ 
+    color: #4A4848; 
+} 
+:-moz-placeholder { /* Mozilla Firefox 4 to 18 */ 
+    color: #4A4848; 
+} 
+::-moz-placeholder { /* Mozilla Firefox 19+ */ 
+    color: #4A4848; 
+} 
+:-ms-input-placeholder { /* Internet Explorer 10+ */ 
+    color: #4A4848; 
+} 
+
+.css{ background-image:url();}
+.sel_ul{ position:relative; z-index:1; width:270px; margin:0 auto;}
+.sel_ul li{ width:100%; border:solid 1px #968f80; background:rgba(255,255,255,0.8); border-radius:5px; height:40px; line-height:40px; margin-bottom:15px;}
+
+    </style>
+
+
+        <!--no-repeat 50% 0; background-size:cover; padding:0% 0 180%; 
+            background-size:cover;background-repeat: no-repeat;background-attachment: fixed;
+        -->
+    </head>
+
+    <body  style="background:url()" onload="addDateOption(),addTimeOption(),addNumOption()">
+
+        <div style="position:absolute;z-index:-99;">
+            <img src="static/imgs_new/errorbg.jpg" onerror="this.src='static/imgs_new/errorbg.jpg'" style="width:100%;height:690px;" alt="" />
+        </div> 
+
+          <div style="width:100%;height:120px;margin-left:-0%;margin-top:0%;margin-bottom:5%;border:0px solid red;background-color:white;">
+              <table width="100%" height="120px;" border="0" bordercolor="green" cellspacing="0" cellpadding="0" bgcolor="">
+                  <tr height="30" >
+                      <td colspan="2" width="30" style="text-align:center;"><span style="color:#2694C7">中</span>&nbsp;&nbsp;<a href="OrderEnPhoneOrderServlet?shop_account=lanqing"><span style="color:#BDA991;" >EN</span></a></td>
+                      <td rowspan="3"width="120">
+                          <div class="suofang" style=" margin-top:0%;margin-bottom:0%;margin-left:;margin-right:; border-radius:0%; overflow:; ">
+                              <img  src="static/imgs_new/lanqing_498_lanqinglogo.png" onerror="this.src='static/imgs_new/loading_tm.gif'"style=""  />		 
+                          </div>
+                      </td>
+                  </tr>
+    <tr height="50">
+        <td colspan="2" bgcolor="#BDA991">
+            <div style="text-align:center;font-size:18px;margin-top:1%;">预约申请</div>
+            <div style="text-align:center;">Online Reservation</div>
+        </td>
+    </tr>
+    <tr height="20"><td colspan="2" style="font-size:13px;padding-top:10px;padding-bottom:3%; text-align:center;">营业时间：10:00-21:00</td></tr>
+              </table>
+          </div>
+
+
+          <form action="OrderAdd_PhoneServlet?shop_account=lanqing" id="addOrderForm" method="post" >
+              <!-- <div style="background:url() no-repeat 10px center;padding-bottom:5%;margin-left:18%;margin-right:auto;margin-top:15%;border:0px solid red;width:75%;position:absolute;z-index:34;"> -->
+              <div class="menu_main" style="padding-bottom:5%;">	
+                  <ul class="sel_ul" style="padding-bottom:5%;">
+                      <!-- 预约日期-->
+                      <li>
+                          <span class="sp1" style="display:block;margin-top:1.5%;margin-left:2%;">
+                              <img src="static/imgs_new/order_date.png" style="width:30px;height:30px;"></img>
+                          </span>
+                          <span class="sp1" style="display:block;margin-top:-10%;margin-left:20%;">
+                              <select class="sel_c" style="font-size:13px;" name="date" id="date">	
+
+                              </select>
+                          </span>
+                      </li>
+                      <!-- 预约时间 -->
+                      <li>
+                          <span class="sp2" style="display:block;margin-top:1.5%;margin-left:2%;">
+                              <img src="static/imgs_new/order_time.png" style="width:30px;height:30px;"></img>
+                          </span>
+                          <span class="sp2" style="display:block;margin-top:-10%;margin-left:20%;">
+                              <select class="sel_c" style="font-size:13px;" name="time" id="time">	
+                              </select>
+                          </span>
+                      </li>
+                      <!-- 预约人数 -->
+                      <li>
+                          <span class="sp3" style="display:block;margin-top:1.5%;margin-left:2%;">
+                              <img src="static/imgs_new/order_num.png" style="width:30px;height:30px;"></img>
+                          </span>
+                          <span class="sp3" style="display:block;margin-top:-10%;margin-left:20%;">
+                              <select class="sel_c"  style="font-size:13px;"name="num_person" id="num">	
+                              </select>
+                          </span>
+                      </li>
+                      <!-- 手机或会员号 -->
+                      <li>
+                          <span class="sp5" style="display:block;margin-top:1.5%;margin-left:2%;">
+                              <img src="static/imgs_new/order_phone.png" style="width:30px;height:30px;"></img>
+                          </span>
+                          <span class="sp2" style="display:block;margin-top:-11%;margin-left:20%;">
+                              <input style="font-size:13px;padding-left:5px;" type="text" name="account" id="account" class="input_c" placeholder="您的手机或会员号" id="phone" maxlength="11" size="14"  />
+                          </span>
+                      </li> 
+                      <!-- 会员号 -->
+                      <!--  <li>
+                          <span class="sp5" style="display:block;margin-top:1.5%;margin-left:2%;">
+                          <img src="static/imgs_new/order_phone.png" style="width:30px;height:30px;"></img>
+                          </span>
+                          <span class="sp2" style="display:block;margin-top:-11%;margin-left:20%;">
+                          <input style="font-size:13px;" type="text" name="vip_account" id="vip" maxlength="20" class="input_c" placeholder="您的手机或会员号" />
+                          </span>
+                          </li>  -->
+                          <!-- 预约人姓名 -->
+                          <li>
+                              <span class="sp4" style="display:block;margin-top:1.5%;margin-left:2%;">
+                                  <img src="static/imgs_new/order_name.png" style="width:30px;height:30px;"></img>
+                              </span>
+                              <span class="sp2" style="display:block;margin-top:-11%;margin-left:20%;">
+                                  <input style="font-size:13px;padding-left:5px;" type="text" name="name" id="name" class="input_c" maxlength="15" placeholder="您的姓名" />
+                              </span>
+                          </li> 
+                          <!-- 预约备注 -->         
+                          <li class="ly">
+                              <span class="sp6" style="display:block;margin-top:1.5%;margin-left:2%;">
+                                  <img src="static/imgs_new/order_remark.png" style="width:30px;height:30px;"></img>
+                              </span>
+                              <span class="sp2" style="display:block;margin-top:-11%;margin-left:20%;">
+                                  <textarea rows="5" cols="10" style="font-size:13px;padding-left:5px;" placeholder="留言" name="remark" id="remark" class="input_c text_area"></textarea>
+                              </span>
+                          </li>
+                          <!-- 预定按钮 -->
+                          <li style="background-color:rgba(59,177,230,0.7);border:none;">
+                              <div style="margin-left:auto;margin-right:auto;width:260px;color:white;border:0px solid red;border-radius: 5px;height:40px;text-align:center; line-height:40px;" onclick="addOrderCheck()">预&nbsp;&nbsp;订</div>
+                          </li>
+                  </ul>
+
+              </div>
+          </form>
+
+    </body>
+</form>

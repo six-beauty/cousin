@@ -1,0 +1,178 @@
+$def with(err_msg, phone_err)
+
+<form name="main" method="post">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="X-UA-Compatible" content="ie=edge">
+        <title>报名</title>
+        <style>
+body {
+    font-family: "Helvetica Neue", Helvetica, "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Source Han Sans CN", "Microsoft YaHei", "Apple Color Emoji", "Segoe UI Symbol", Arial, sans-serif;
+    font-style: normal;
+    color: #333;
+    font-size: 14px;
+}
+
+    .wrapper {
+        max-width: 750px;
+        margin: 0 auto;
+        padding: 8px;
+    }
+
+    .container {
+        border-radius: 4px;
+        padding: 8px 16px;
+        -webkit-box-shadow: 0 2px 4px #6c6d6f;
+        -moz-box-shadow: 0 2px 4px #6c6d6f;
+        box-shadow: 0 2px 4px #6c6d6f;
+    }
+
+    .h3,
+    h3 {
+        font-size: 24px;
+    }
+
+    .h1,
+    .h2,
+    .h3,
+    h1,
+    h2,
+    h3 {
+        margin-top: 20px;
+        margin-bottom: 10px;
+    }
+
+    .page-date {
+        color: #6c6d6f;
+    }
+
+    .page-title {
+        color: rgb(142, 201, 101);
+        font-weight: 700;
+        font-style: italic;
+        text-indent: 1em;
+    }
+
+    .input-item input {
+        border: none;
+    }
+
+        </style>
+
+        <script type="text/javascript">
+
+function addDateOption(){
+    //根据id查找对象
+    var obj=document.getElementById('date');
+    var w_array=new Array("星期天","星期一","星期二","星期三","星期四","星期五","星期六");
+    for(var i=0;i<30;i++){
+
+        var d = new Date();
+        d.setDate(d.getDate()+i)
+            var year = d.getFullYear();
+        var h=d.getHours();        //小时
+        var mins=d.getMinutes();   //分
+        var s=d.getSeconds();      //秒
+        var date = d.getDate();
+        var month = d.getMonth()+1;
+        var date = d.getDate();
+        var week = d.getDay();
+        /*if(month<10) month="0" + month;
+          if(date<10) month="0" + date;
+          if(h<10) h="0" + h;
+          if(mins<10) mins="0" + mins;
+          if(s<10) s="0" + s; */
+        //添加option选项
+        obj.options.add(new Option(year+"-"+month+"-"+date+"     "+w_array[week],year+"-"+month+"-"+date+w_array[week]));
+    } 
+}
+function addNumOption(){
+    //根据id查找对象
+    var obj=document.getElementById('num');
+    var num = 0;
+    for(var i=1;i<31;i++){
+        num = i;
+
+        //添加option选项
+        obj.options.add(new Option(num+"人",num));
+    } 
+}
+
+        </script>
+
+    </head>
+
+    <body  style="background:url()" onload="addDateOption(),addTimeOption(),addNumOption()">
+        <section class="wrapper">
+            <section class="container">
+                <header class="page-head">
+                    <h2>马上报名<sup>$err_msg</sup></h2>
+                    <p class="page-date"></p>
+                </header>
+                <main>
+                <h3 class="page-title">我们一起去摘果吧！</h3>
+                <div class="input-item">
+                    <p>
+                    <label for="name">您的姓名是？</label>
+                    </p>
+                    <p>
+                    <input id="name" type="text" name="name" placeholder="请输入您的姓名">
+                    </p>
+                </div>
+                <div class="input-item">
+                    <p>
+                    <label for="name">您的联系方式(手机/微信号)?<sup>$phone_err</sup></label>
+                    </p>
+                    <p>
+                    <input id="phone" type="text" name="phone" placeholder="请输入手机号码">
+                    </p>
+                    <p>
+                    <input id="wx" type="text" name="wx" placeholder="请输入微信号码">
+                    </p>
+                </div>
+                <div class="input-item">
+                    <p>
+                    <label for="count">请输入参与人数</label>
+                    </p>
+                    <p>
+                    <input id="count" style="width:45px;height:30px;" type="number" name="male" value=2 placeholder="参与成人人数">成人
+                    </p>
+                    <p>
+                    <input id="count" style="width:45px;height:30px;"type="number" name="child" value=1 placeholder="参与儿童人数">儿童
+                    </p>
+                </div>
+                <div class="input-item">
+                    <p>
+                    <label for="type" value ="2" >请选择活动类型</label>
+                    </p>
+                    <p>
+                    <input id="type" type="radio" name="ly_type" value="1">一日游
+                    <input id="type" type="radio" name="ly_type" value="2" checked="checked">两日游
+                    </p>
+                </div>
+                <div class="input-item">
+                    <p>
+                    <label for="count">请输入预订房间数</label>
+                    </p>
+                    <p>
+                    <input id="count" style="width:45px;height:30px;" type="number" name="room" value=1 placeholder="预订房间数">房间
+                    </p>
+                    <p>
+                </div>
+                <div class="input-item">
+                    <p>
+                    <label for="date">请选择预约参与时间</label>
+                    </p>
+                  <select class="sel_c" style="font-size:13px;" name="order_date" id="date">	
+                    </select>
+                </div>
+                <p>向东农场欢迎您的加入</p>
+                <div>
+                    <input type="submit" class="input-submit" value="立即提交">
+                </div>
+                </main>
+            </section>
+        </section>
+    </body>
+</form>

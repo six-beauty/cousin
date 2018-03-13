@@ -1,0 +1,32 @@
+$def with(pay_argv)
+
+<html>
+    <head>
+        <title></title>
+        <style>
+.wrapper {
+    display: -webkit-box;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-box-orient: vertical;
+    -webkit-box-direction: normal;
+    -webkit-flex-direction: column;
+    flex-direction: column;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
+    align-items: center;
+    -webkit-box-pack: center;
+    -webkit-justify-content: center;
+    justify-content: center;
+}
+        </style>
+    </head>
+
+    <body class="wrapper">
+        <h1>微信支付，请长按识别图中二维码支付</h1>
+        <p>
+        <img src="static/imgs_pay/${pay_argv['imgs']}.png">
+        </p>
+        <h2>${pay_argv['head2']}</h2>
+    </body>
+</html>
