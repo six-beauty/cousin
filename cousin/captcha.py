@@ -6,7 +6,231 @@ import traceback
 import json
 import urllib
 import base64
+from PIL import Image
+import pytesseract
+import os
 
+WHITE = (255,255,255)
+BLACK = (0,0,0)
+
+#对图片做预处理，去除背景
+def pre_concert(img):
+    width,height = img.size
+    threshold = 35
+
+    for i in range(0,width):
+        for j in range(0,height):
+            p = img.getpixel((i,j))#抽取每个像素点的像素
+            r,g,b = p
+            if r > threshold or g > threshold or b > threshold:
+                img.putpixel((i,j),WHITE)
+            else:
+                img.putpixel((i,j),BLACK)
+
+    img_points = []
+    for item in img.getdata():
+        r,g,b = item
+        if r > threshold or g > threshold or b > threshold:
+            img_points.append(WHITE)
+        else:
+            img_points.append(BLACK)
+
+    return img_points
+
+#横向扫描, 获取最大边界大小. 除去小于最大噪点大小的面积.
+def remove_noise(img, points):
+    # 噪点大小
+    MAX_NOISY_COUNT = 25 
+
+    width, height = img.size
+    # 标记位置, 初始化都是0, 未遍历过
+    flag_list = []
+    for i in range(width * height):
+        flag_list.append(0)
+
+    # 遍历
+    for index, value in enumerate(points):
+        _y = index // width
+        _x = index - _y * width
+        # print _x, _y
+        if flag_list[index] == 0 and value == BLACK:
+            flag_list[index] = 1
+            _tmp_list = [index]
+            recursion_scan_black_point(_x, _y, width, height, _tmp_list, flag_list, points)
+            if len(_tmp_list) <= MAX_NOISY_COUNT:
+                for x in _tmp_list:
+                    points[x] = WHITE
+
+        else:
+            flag_list[index] = 1
+
+def recursion_scan_black_point(x, y, width, height, tmp_list, flag_list, points):
+    # 左上
+    if 0 <= (x - 1) < width and 0 <= (y - 1) < height:
+        _x = x - 1
+        _y = y - 1
+        _inner_recursion(_x, _y, width, height, tmp_list, flag_list, points)
+
+    # 上
+    if 0 <= (y - 1) < height:
+        _x = x
+        _y = y - 1
+        _inner_recursion(_x, _y, width, height, tmp_list, flag_list, points)
+
+    # 右上
+    if 0 <= (x + 1) < width and 0 <= (y - 1) < height:
+        _x = x + 1
+        _y = y - 1
+        _inner_recursion(_x, _y, width, height, tmp_list, flag_list, points)
+
+    # 左
+    if 0 <= (x - 1) < width:
+        _x = x - 1
+        _y = y
+        _inner_recursion(_x, _y, width, height, tmp_list, flag_list, points)
+
+    # 右
+    if 0 <= (x + 1) < width:
+        _x = x + 1
+        _y = y
+        _inner_recursion(_x, _y, width, height, tmp_list, flag_list, points)
+
+    # 左下
+    if 0 <= (x - 1) < width and 0 <= (y + 1) < height:
+        _x = x - 1
+        _y = y + 1
+        _inner_recursion(_x, _y, width, height, tmp_list, flag_list, points)
+
+    # 下
+    if 0 <= (y + 1) < height:
+        _x = x
+        _y = y + 1
+        _inner_recursion(_x, _y, width, height, tmp_list, flag_list, points)
+
+    # 右下
+    if 0 <= (x + 1) < width and 0 <= (y + 1) < height:
+        _x = x + 1
+        _y = y + 1
+        _inner_recursion(_x, _y, width, height, tmp_list, flag_list, points)
+
+def _inner_recursion(new_x, new_y, width, height, tmp_list, flag_list, points):
+    _index = new_x + width * new_y
+    if flag_list[_index] == 0 and points[_index] == BLACK:
+        tmp_list.append(_index)
+        flag_list[_index] = 1
+        recursion_scan_black_point(new_x, new_y, width, height, tmp_list, flag_list, points)
+    else:
+        flag_list[_index] = 1
+
+def split_fig(img):
+    frame = img.load()
+    img_new = img.copy()
+    frame_new = img_new.load()
+
+    width,height = img.size
+    line_status = None
+    pos_x = []
+    for x in range(width):
+        pixs = []
+        for y in range(height):
+            pixs.append(frame[x,y])
+
+        if len(set(pixs)) == 1:
+            _line_status = 0
+        else:
+            _line_status = 1
+
+        if _line_status != line_status:
+            if _line_status != None:
+                if _line_status == 0:
+                    _x = x
+                elif _line_status == 1:
+                    _x = x - 1
+
+                pos_x.append(_x)
+
+                #辅助线
+                for _y in range(height):
+                    frame_new[x,_y] = BLACK
+
+        line_status = _line_status
+
+    i = 0
+    divs = []
+    boxs = []
+    while True:
+        try:
+            x_i = pos_x[i]
+            x_j = pos_x[i+1]
+        except:
+            break
+
+        i = i + 2
+        boxs.append([x_i,x_j])
+
+    fixed_boxs = []
+    i = 0
+    while i < len(boxs):
+        box = boxs[i]
+        if box[1] - box[0] < 10:
+            try:
+                box_next = boxs[i+1]
+                fixed_boxs.append([box[0],box_next[1]])
+                i += 2
+            except Exception:
+                break
+        else:
+            fixed_boxs.append(box)
+            i += 1
+
+    for box in fixed_boxs:
+        div = img.crop((box[0],0,box[1],height))
+        try:
+            #divs.append(format_div(div,size=(20,40)))
+            divs.append(div)
+        except:
+            divs.append(div)
+
+    #过滤掉非字符的切片
+    _divs = []
+    for div in divs:
+        width,heigth = div.size
+        if width < 5:
+            continue
+
+        frame = div.load()
+        points = 0
+        for i in range(width):
+            for j in range(heigth):
+                p = frame[i,j]
+                if p == BLACK:
+                    points += 1
+
+        if points <= 5:
+            continue
+
+        #new_div = format_div(div)
+        new_div = div
+        _divs.append(new_div)
+    return _divs
+
+
+def image_to_string(img,config='-psm 8'):
+    result = pytesseract.image_to_string(img, lang='eng', config=config)
+    result = result.strip()
+    return result.lower()
+
+
+def recognize_image(captcha):
+    img = Image.open(captcha)
+    img_points = pre_concert(img)
+    #img.save("imgs/black.png")
+
+    remove_noise(img, img_points)
+    img.putdata(img_points)
+    #img1 = split_fig(img)
+    img.save("imgs/rebuild.png")
+    return image_to_string(img,config='-psm 8')
 
 class Captcha():
     def __init__(self):
@@ -14,6 +238,9 @@ class Captcha():
         self.session.header = {"Content-Type":"application/x-www-form-urlencoded"}
 
         self.token = self.baidubce_token()
+
+        if not os.path.isdir('imgs/'):
+            os.makedirs('imgs/')
 
     def baidubce_token(self):
         req_data = {"grant_type":"client_credentials", "client_id":"GmFZoZKX4N9y6o3huUZqb1GO", "client_secret":"oj9SM6QSseATsyukkLSaPpOHQjIwskog"}
@@ -44,60 +271,86 @@ class Captcha():
 
     def captcha_juhe(self, captcha_url):
         capt_data = urllib.request.urlopen(captcha_url, data=None, timeout=3).read()
+        open('imgs/captcha.png', 'wb').write(capt_data)
+        
+        vcode = recognize_image('imgs/captcha.png')
+        #print('recognize:%s'%vcode)
+        if vcode:
+            vcode = self.eng_word(vcode)
+            if vcode:
+                logging.info('recognize captcha:%s', vcode)
+                return vcode
+
+        vcode = self.webimage_check(captcha_url)
+        #print('webimage_check:%s'%vcode)
+        if vcode:
+            vcode = self.eng_word(vcode)
+            if vcode:
+                logging.info('webimage captcha:%s', vcode)
+                return vcode
+
+        #may None
+        return None
+
+    def webimage_check(self, captcha_url):
+        capt_data = open('imgs/rebuild.png','rb').read()
+
         captcha = base64.b64encode(capt_data).decode('utf-8')
         req_data = {'image':captcha, "detect_language":True}
 
         r = self.session.post('https://aip.baidubce.com/rest/2.0/ocr/v1/webimage?access_token='+self.token, data=req_data)
         if r.status_code != 200:
-            logging.error('captcha_juhe req fail,')
+            logging.error('webimage_check req fail,')
             return None
 
         try:
             capt_json = json.loads(r.text)
         except Exception as e:
-            logging.error('captcha_juhe json loads r.text fail， %s', traceback.format_exc())
+            logging.error('webimage_check json loads r.text fail， %s', traceback.format_exc())
             return None
         if not capt_json:
-            logging.error('captcha_juhe json loads fail..')
+            logging.error('webimage_check json loads fail..')
             return None
 
-        print(capt_json)
         if 'error_code' in capt_json and capt_json['error_code'] != 0:
-            logging.error('captcha_juhe decode fail, code:%s, %s', capt_json['error_code'], capt_json['error_msg'])
+            logging.error('webimage_check decode fail, code:%s, %s', capt_json['error_code'], capt_json['error_msg'])
             #Access token invalid or no longer valid
             if capt_json['error_code'] == 110:
                 self.token = self.baidubce_token()
-                return self.captcha_juhe(captcha_url)
+                return self.webimage_check(captcha_url)
             return None
 
         if not capt_json['words_result'] or not len(capt_json['words_result'])>0:
             logging.error('captcha_juhe got words_result fail:%s', r.text)
             return None
 
-        print(capt_json['words_result'])
         words_result = capt_json['words_result']
         vcode = words_result[0]['words']
 
+        return self.eng_word(vcode)
+
+    def eng_word(self, vcode):
         r = self.session.get('https://api.shanbay.com/bdc/search/?word=%s'%vcode)
         if r.status_code != 200:
-            logging.error('captcha_juhe word req fail,')
+            logging.error('eng_word check req fail,')
             return None
         try:
             capt_json = json.loads(r.text)
         except Exception as e:
-            logging.error('captcha_juhe word json loads r.text fail， %s', traceback.format_exc())
+            logging.error('eng_word check json loads r.text fail， %s', traceback.format_exc())
             return None
         if not capt_json:
-            logging.error('captcha_juhe word json loads fail..')
+            logging.error('eng_word check json loads fail..')
             return None
 
         if capt_json['status_code'] != 0:
-            logging.error('captcha_juhe word decode fail, code:%s, %s', capt_json['status_code'], capt_json['msg'])
+            logging.error('eng_word check decode fail, code:%s, %s', capt_json['status_code'], capt_json['msg'])
             return None
 
         return vcode
 
+
 if __name__ == '__main__':
     captcha = Captcha()
-    capt = captcha.captcha_juhe('https://www.douban.com/misc/captcha?id=QaNtcfp4BfSFpFLt5hYQZQTy:en&size=s')
-    print(capt)
+    capt2 = captcha.captcha_juhe('http://120.24.59.86:9903/static/memory.png')
+    print(capt2)
