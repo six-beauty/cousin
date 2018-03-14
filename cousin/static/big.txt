@@ -81,3 +81,5 @@ shame
 color
 natural
 feather
+morning
+polish

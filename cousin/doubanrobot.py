@@ -19,6 +19,7 @@ import json
 import traceback
 import threading
 import captcha
+import correct
 
 #send_mail
 import smtplib  
@@ -207,6 +208,10 @@ class DoubanRobot:
                     vcode = vcode.decode('utf-8')
                     self.capt_queue.put(vcode)
                     logging.info('input vcode:%s', vcode)
+
+                    if not vcode in correct.WORDS:
+                        correct.WORDS.update(re.findall(r'\w+', vcode))
+                        open('static/big.txt', 'a').write('\n%s'%vcode)
                     break
             redis_sub.unsubscribe(['vcode'])
         except:

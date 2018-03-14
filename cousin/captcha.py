@@ -10,6 +10,7 @@ from PIL import Image
 import pytesseract
 import os
 import re
+import correct
 
 WHITE = (255,255,255)
 BLACK = (0,0,0)
@@ -272,27 +273,39 @@ class Captcha():
     def captcha_juhe(self, captcha_url):
         capt_data = urllib.request.urlopen(captcha_url, data=None, timeout=3).read()
         open('imgs/captcha.png', 'wb').write(capt_data)
-        
-        vcode2 = recognize_image('imgs/captcha.png', 45, 10)
 
-        vcode = self.webimage_check(captcha_url)
+        #threshold 越小，图越清晰
+        #max_noisy 越大，独立的noisy越容易被删除(图越清晰)
+        vcode = self.captcha_juhe1(35, 25)
+        if vcode:
+            return vcode
+
+        #不行，调整
+        vcode = self.captcha_juhe1(55, 25)
+        if vcode:
+            return vcode
+
+        return vcode
+        
+    def captcha_juhe1(self, threshold=35, max_noisy=25):
+        vcode = recognize_image('imgs/captcha.png', threshold, max_noisy)
+        if vcode:
+            vcode = self.eng_word(vcode)
+            if vcode:
+                logging.info('recognize captcha:%s', vcode)
+                return vcode
+
+        vcode = self.webimage_check()
         if vcode:
             vcode = self.eng_word(vcode)
             if vcode:
                 logging.info('webimage captcha:%s', vcode)
                 return vcode
 
-        #先判断webimage_check的
-        if vcode2:
-            vcode2 = self.eng_word(vcode2)
-            if vcode2:
-                logging.info('recognize captcha:%s', vcode2)
-                return vcode2
-
         #may None
         return None
 
-    def webimage_check(self, captcha_url):
+    def webimage_check(self):
         capt_data = open('imgs/rebuild.png','rb').read()
 
         captcha = base64.b64encode(capt_data).decode('utf-8')
@@ -317,7 +330,7 @@ class Captcha():
             #Access token invalid or no longer valid
             if capt_json['error_code'] == 110:
                 self.token = self.baidubce_token()
-                return self.webimage_check(captcha_url)
+                return self.webimage_check()
             return None
 
         if not capt_json['words_result'] or not len(capt_json['words_result'])>0:
@@ -326,14 +339,16 @@ class Captcha():
 
         words_result = capt_json['words_result']
         vcode = words_result[0]['words']
-
+        if len(vcode) <= 4:
+            return None
+        
         return vcode
 
     def eng_word(self, vcode):
-        #尝试去掉空格、标点等字符
         vcode1 = re.sub('[^A-Za-z]','', vcode)
         vcode1 = self.eng_word2(vcode1)
-        if vcode1:
+        if vcode1 and len(vcode1)>=5:
+            #豆瓣验证码一般大于4个单词
             return vcode1
 
         #尝试分割
@@ -351,6 +366,7 @@ class Captcha():
         return None
 
     def eng_word2(self, vcode):
+        vcode = correct.correction(vcode)
         r = self.session.get('https://api.shanbay.com/bdc/search/?word=%s'%vcode)
         if r.status_code != 200:
             logging.error('eng_word check req fail,')
@@ -373,12 +389,13 @@ class Captcha():
 
 if __name__ == '__main__':
     captcha = Captcha()
-    capt2 = captcha.captcha_juhe('http://120.24.59.86:9903/static/imgs/captcha_2.png')
+    capt2 = captcha.captcha_juhe('http://120.24.59.86:9903/static/imgs/captcha-2.jpg')
     print(capt2)
     '''
     captlist = os.listdir('imgs/')
     for capt in captlist:
         captcha = Captcha()
         capt2 = captcha.captcha_juhe('http://120.24.59.86:9903/static/imgs/%s'%capt)
-        print(capt2)
+        print(capt, ', ', capt2)
+        print('------------------------------')
     '''
