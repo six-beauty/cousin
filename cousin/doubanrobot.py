@@ -134,12 +134,13 @@ class DoubanRobot:
             self.get_ck(None)
 
     def get_chat(self, msg, uid):
-        if '表妹' in msg:
-            if msg == '表妹':
+        if '表妹' in msg or '夏文' in msg:
+            if msg == '表妹' or msg == '夏文':
                 content = [u'你好', u'你是谁', u'在吗']
                 msg = random.choice(content)
             else:
                 msg = msg.replace('表妹', '你')
+                msg = msg.replace('夏文', '你')
         chat_msg = self.turi.get_chat(msg, uid)
         return chat_msg
 

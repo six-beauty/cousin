@@ -1,4 +1,4 @@
-# coding=utf-8
+# -*- coding: utf-8 -*-
 
 import requests
 import logging
@@ -9,14 +9,14 @@ import base64
 from PIL import Image
 import pytesseract
 import os
+import re
 
 WHITE = (255,255,255)
 BLACK = (0,0,0)
 
 #对图片做预处理，去除背景
-def pre_concert(img):
+def pre_concert(img, threshold):
     width,height = img.size
-    threshold = 35
 
     for i in range(0,width):
         for j in range(0,height):
@@ -38,9 +38,8 @@ def pre_concert(img):
     return img_points
 
 #横向扫描, 获取最大边界大小. 除去小于最大噪点大小的面积.
-def remove_noise(img, points):
+def remove_noise(img, points, max_noisy):
     # 噪点大小
-    MAX_NOISY_COUNT = 25 
 
     width, height = img.size
     # 标记位置, 初始化都是0, 未遍历过
@@ -57,7 +56,7 @@ def remove_noise(img, points):
             flag_list[index] = 1
             _tmp_list = [index]
             recursion_scan_black_point(_x, _y, width, height, _tmp_list, flag_list, points)
-            if len(_tmp_list) <= MAX_NOISY_COUNT:
+            if len(_tmp_list) <= max_noisy:
                 for x in _tmp_list:
                     points[x] = WHITE
 
@@ -221,16 +220,17 @@ def image_to_string(img,config='-psm 8'):
     return result.lower()
 
 
-def recognize_image(captcha):
+def recognize_image(captcha, threshold=45, max_noisy=25):
     img = Image.open(captcha)
-    img_points = pre_concert(img)
+    img_points = pre_concert(img, threshold)
     #img.save("imgs/black.png")
 
-    remove_noise(img, img_points)
+    remove_noise(img, img_points, max_noisy)
     img.putdata(img_points)
     #img1 = split_fig(img)
     img.save("imgs/rebuild.png")
-    return image_to_string(img,config='-psm 8')
+    vcode = image_to_string(img,config='-psm 8')
+    return vcode
 
 class Captcha():
     def __init__(self):
@@ -273,21 +273,21 @@ class Captcha():
         capt_data = urllib.request.urlopen(captcha_url, data=None, timeout=3).read()
         open('imgs/captcha.png', 'wb').write(capt_data)
         
-        vcode = recognize_image('imgs/captcha.png')
-        #print('recognize:%s'%vcode)
-        if vcode:
-            vcode = self.eng_word(vcode)
-            if vcode:
-                logging.info('recognize captcha:%s', vcode)
-                return vcode
+        vcode2 = recognize_image('imgs/captcha.png', 45, 10)
 
         vcode = self.webimage_check(captcha_url)
-        #print('webimage_check:%s'%vcode)
         if vcode:
             vcode = self.eng_word(vcode)
             if vcode:
                 logging.info('webimage captcha:%s', vcode)
                 return vcode
+
+        #先判断webimage_check的
+        if vcode2:
+            vcode2 = self.eng_word(vcode2)
+            if vcode2:
+                logging.info('recognize captcha:%s', vcode2)
+                return vcode2
 
         #may None
         return None
@@ -321,15 +321,36 @@ class Captcha():
             return None
 
         if not capt_json['words_result'] or not len(capt_json['words_result'])>0:
-            logging.error('captcha_juhe got words_result fail:%s', r.text)
+            logging.error('webimage_check got words_result fail:%s', r.text)
             return None
 
         words_result = capt_json['words_result']
         vcode = words_result[0]['words']
 
-        return self.eng_word(vcode)
+        return vcode
 
     def eng_word(self, vcode):
+        #尝试去掉空格、标点等字符
+        vcode1 = re.sub('[^A-Za-z]','', vcode)
+        vcode1 = self.eng_word2(vcode1)
+        if vcode1:
+            return vcode1
+
+        #尝试分割
+        vcode_split = vcode.split()
+        for vcode in vcode_split:
+            vcode = re.sub('[^A-Za-z]','', vcode)
+            if len(vcode) <= 4:
+                #豆瓣验证码一般大于4个单词
+                continue
+
+            vcode = self.eng_word2(vcode)
+            if vcode:
+                return vcode
+
+        return None
+
+    def eng_word2(self, vcode):
         r = self.session.get('https://api.shanbay.com/bdc/search/?word=%s'%vcode)
         if r.status_code != 200:
             logging.error('eng_word check req fail,')
@@ -347,10 +368,17 @@ class Captcha():
             logging.error('eng_word check decode fail, code:%s, %s', capt_json['status_code'], capt_json['msg'])
             return None
 
-        return vcode
+        return capt_json['data']['content']
 
 
 if __name__ == '__main__':
     captcha = Captcha()
-    capt2 = captcha.captcha_juhe('http://120.24.59.86:9903/static/memory.png')
+    capt2 = captcha.captcha_juhe('http://120.24.59.86:9903/static/imgs/captcha_2.png')
     print(capt2)
+    '''
+    captlist = os.listdir('imgs/')
+    for capt in captlist:
+        captcha = Captcha()
+        capt2 = captcha.captcha_juhe('http://120.24.59.86:9903/static/imgs/%s'%capt)
+        print(capt2)
+    '''
