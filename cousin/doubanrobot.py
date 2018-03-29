@@ -20,6 +20,7 @@ import traceback
 import threading
 import captcha
 import correct
+from lxml import etree
 
 #send_mail
 import smtplib  
@@ -37,6 +38,7 @@ class captcha_mail:
         self.smtp.connect('smtp.126.com','25')  
         self.smtp.login(self.from_addr, self.from_passwd)  
 
+
     def __del__(self):
         self.smtp.quit()  
 
@@ -48,8 +50,10 @@ class captcha_mail:
         captcha url: %s
 
         captcha code input: http://120.24.59.86:9903/
+
+        captcha time: %s
         ------------------end----------------------------
-        """%(post_url, captcha_url)
+        """%(post_url, captcha_url, time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()) )
 
         mail_msg=email.mime.multipart.MIMEMultipart()  
         mail_msg['From']=self.from_addr
@@ -75,11 +79,11 @@ self_mail = [122619569, 54451019]
 #self topics不回复
 my_topics = [106547648,111516608, 112933822, 112932149, 112933816, 112933934, 113515127, 113515502]
 #ignore topics
-ignore_topics = [106547305, 106547516, 106551311]
+ignore_topics = [106547305, 106547516, 106551311, 113673437, 103217103, 63920532]
 lokiok=52272009
 
 #不回复的豆瓣id
-ignore_topic_douban_id = [102393339, 167730677, ]
+ignore_topic_douban_id = [102393339, 167730677, 168373780]
 #雪亭
 #ignore_topic_douban_id.append(52272009)
 
@@ -101,7 +105,10 @@ class DoubanRobot:
         self.sofa_queue = queue.Queue()
 
         self.captcha = captcha.Captcha()
+        #wait input 间隔
         self.captcha_last = time.time()
+        #发送邮件间隔
+        self.mail_interval = time.time()
 
         self.sofa_dic = {}
         self.doumail_dic = {}
@@ -218,6 +225,17 @@ class DoubanRobot:
             logging.error('===input_captcha fail, %s', traceback.format_exc())
         alive = False
 
+    def save_captcha(self, captcha_url):
+        #保存captcha
+        capt_dir = 'data/captcha/'
+        if not os.path.isdir(capt_dir):
+            os.makedirs(capt_dir)
+        capt_id = self.redis.incrby('capt_id')
+        capt_path = os.path.join(capt_dir, 'captcha_%s.png'%capt_id)
+
+        capt_data = urllib.request.urlopen(captcha_url, data=None, timeout=3).read()
+        open(capt_path, 'wb').write(capt_data)
+
     def identify_code_check(self, r, post_url, post_data):
         # 验证码,需要处理
         captcha = re.search('<input type="hidden" name="captcha-id" value="(.+?)"/>', r.text)
@@ -231,11 +249,17 @@ class DoubanRobot:
         captcha_id = captcha[1]
         imgurl = "https://www.douban.com/misc/captcha?id={0}&size=s".format(captcha_id)
         logging.info('post_url:%s, captcha url: %s', post_url, imgurl)
- 
-        if r'/login' in post_url or (self.captcha_last and time.time() - self.captcha_last < 3):
-            self.redis.set('captcha', captcha_id)
-            capt = captcha_mail()
-            capt.send_mail(post_url, imgurl)
+        self.redis.set('captcha', captcha_id)
+        
+        reidentify = self.captcha_last and time.time() - self.captcha_last < 3
+        if r'/login' in post_url or reidentify:
+            if time.time() - self.mail_interval > 3*60:
+                #发送邮件间隔
+                capt = captcha_mail()
+                capt.send_mail(post_url, imgurl)
+                logging.error('captcha wait for mail captcha:%s',  self.mail_interval)
+
+                self.mail_interval = time.time()
 
             tt = threading.Thread(target=self.input_captcha)
             tt.start()
@@ -276,8 +300,10 @@ class DoubanRobot:
 
             self.captcha_last = time.time()
             if not vcode:
+                #save captcha
+                self.save_captcha(imgurl)
                 #没有，重新进入mail captcha流程
-                return self.identify_code_check(r, r.url, post_data)
+                return self.identify_code_check(r, post_url, post_data)
 
         if 'misc/sorry' in r.url:
             post_data2 = {}
@@ -291,10 +317,13 @@ class DoubanRobot:
             post_data["captcha-id"] = captcha_id
             r = self.session.post(post_url, data=post_data, cookies=self.session.cookies.get_dict())
 
+        if '验证码错误' in r.text:
+            self.save_captcha(imgurl)
+
         save_html('identify.html',r.text)
 
         logging.info('captcha solution:%s, id:%s, url:%s', vcode, captcha_id, r.url)
-        r = self.identify_code_check(r, r.url, post_data)
+        r = self.identify_code_check(r, post_url, post_data)
 
         return r
 
@@ -417,7 +446,7 @@ class DoubanRobot:
 
         for mail in mail_list :
             msg = re.search(r'<a class="url" href="https://www.douban.com/doumail/(\d*)/">', mail.prettify(), re.DOTALL)
-            self.send_mail(m_text)
+            self.send_mail(msg, m_text)
 
     def answer_unread_mail(self, unread=True):
         '''
@@ -555,17 +584,12 @@ class DoubanRobot:
                     max_id = max(max_id, mail_id)
                     continue 
 
-                '''
-                if '表哥' in msg or '写代码的' in msg or '抠脚' in msg:
-                    chat_msg = '同学你好哇，对表妹有什么建议吗，可以联系我微信:sanyue9394。\n\r  假如表妹骚扰到你，深感抱歉。微信告诉我的话，我会修改它的代码。\n\r  假如你对骑行有兴趣的话，很可惜，我也有一年没玩了，不过有兴趣交流的话，不妨message我吧(smile) \n\r   欢迎下次光临⚆_⚆\n\r'
-                elif ('表哥' in msg or '大汉' in msg) and '照片' in msg:
-                    image_urls = ['https://www.douban.com/photos/photo/2494128984/',]
-                    chat_msg = random.choice(image_urls)
-                else:
-                '''
                 #普通聊天消息
                 if '网站链接' in msg or '网站地址' in msg or '磁力链接' in msg:
-                    chat_msg = '磁力搜索网站链接: http://121.196.207.196:5002 \n\r可以的话，不妨关注一下， 帮忙顶下帖(https://www.douban.com/group/topic/113515502/?start=0, https://www.douban.com/group/topic/113515127/)吧，同学 :)'
+                    chat_msg = '番茄小说: http://tomatow.top/novel. \n\r磁力搜索网站链接: http://121.196.207.196:5002 , 请用电脑打开(如chorme浏览器),下载需要安装迅雷、torrent(磁力链接下载);\n\r可以的话，不妨关注一下。:)\n\r假如电影的话，推荐“至暗时刻”，记录片的“蓝色星球”也不错。小电影的话，关键字可以是“学妹、合集、小美女"等等，看你个人偏好吧。 如果有什么建议，不妨留言回复一下 :)\n\r'
+                elif "蒸" in msg or "征" in msg:
+                    content = ['好看的皮囊三千一晚，有趣的灵魂要房要车。', '选我！选我！', '"别找了找不到的，你还在想些什么"', '除了有趣，还有什么别的具体要求吗']
+                    chat_msg = random.choice[content]
                 else:
                     chat_msg = self.get_chat(msg, uid)
 
@@ -674,30 +698,55 @@ class DoubanRobot:
                     "start" : "0",
                     "submit_btn" : "加上去"
                     }
+            post_url = "https://www.douban.com/group/topic/%s/add_comment#last?"%(item)
+            r = self.session.post(post_url, post_data, cookies=self.session.cookies.get_dict())
+            
+            try:
+                r=self.identify_code_check(r, post_url, post_data)
+            except Exception as e:
+                logging.error('topics_up %s identify err:%s!'%(item, e))
+                continue
 
-            r = self.session.post("https://www.douban.com/group/topic/" + item + "/add_comment#last?", post_data, cookies=self.session.cookies.get_dict())
             if r.status_code == 200:
                 logging.info('Okay, already up ' + item + ' topic' )
-            logging.info("topic up, sleep 60's")
-            time.sleep(60)  # Wait a minute to up next topic, You can modify it to delay longer time
+
+            logging.info("topic up:%s success, sleep 3's", item, post_data['rv_comment'])
+            time.sleep(3)  # Wait a minute to up next topic, You can modify it to delay longer time
         return True
 
-    # e.g. https://www.douban.com/group/topic/22836371/
-    #app.delete_comments('group_topic_url')   
-    def delete_comments(self,topic_url):
-        topic_id = re.findall(r'([0-9]+)', topic_url)[0]
-        content = self.session.get(topic_url).text
-        comments_list = re.findall(r'<li class="clearfix comment-item" id="[0-9]+" data-cid="([0-9]+)" >', content)
-        # Leave last comment and delete all of the past comments
-        for item in comments_list[:-1]:
-            post_data = {
-                    "ck"  : self.ck,
-                    "cid" : item
-                    }
-            r = self.session.post("https://www.douban.com/j/group/topic/" + topic_id + "/remove_comment", post_data, cookies=self.session.cookies.get_dict())
-            if r.status_code == 200:
-                logging.info('Okay, already delete ' + topic_id + ' topic' )  # All of them return 200... Even if it is not your comment
-            time.sleep(10)  # Wait ten seconds to delete next one
+    def delete_comment(self, topic_id):
+        if not self.ck:
+            logging.error('ck is invalid!')
+            return False
+
+        for page in range(0, 1000, 100):
+            post_url = "https://www.douban.com/group/topic/%s/?start=%s"%(topic_id, page)
+
+            r = self.session.get(post_url, cookies=self.session.cookies.get_dict())
+            html = etree.HTML(r.text)
+            cids = html.xpath("//li[@class='clearfix comment-item']/@data-cid")
+            uids = html.xpath("//li[@class='clearfix comment-item']/div[@class='reply-doc content']/div[@class='operation_div']/@id")
+
+            if len(cids) == 0 or len(uids) == 0:
+                #delete success
+                logging.info('topic %s delete_comment success!', topic_id)
+                return True
+
+            remove_url = "https://www.douban.com/j/group/topic/%s/remove_comment"%(topic_id)
+            for cid, uid in zip(cids, uids):
+                if uid != self.douban_id:
+                    continue
+                # Leave last comment and delete all of the past comments
+                post_data = {
+                        "ck"  : self.ck,
+                        "cid" : cid
+                        }
+                r = self.session.post(remove_url, post_data, cookies=self.session.cookies.get_dict())
+
+                if r.status_code == 200:
+                    logging.info('Okay, already delete %s topic:%s', topic_id, cid )  # All of them return 200... Even if it is not your comment
+                time.sleep(1)  # Wait ten seconds to delete next one
+
         return True
 
     def sofa_monitor(self, session, group_id):
@@ -985,7 +1034,7 @@ def monitor_work(douban, circle_num):
                 tt = 30*60
             elif sofa_num < 4 and qsize > 12:
                 tt = 6*60
-            elif sofa_num > 4 and qsize < 4:
+            elif sofa_num > 0 and qsize < 4:
                 tt = 60
             else:
                 tt = 3*60
@@ -1013,7 +1062,6 @@ def work(hotReload=False):
     tt = threading.Thread(target=monitor_work, args=(douban, circle_times))
     tt.start()
 
-    #app.talk_status('python3 确实很帅，架构决定重搭。豆油已修复，来豆油我吧!')
     while True:
         try:
             douban.login_check()
