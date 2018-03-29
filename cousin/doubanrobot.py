@@ -708,10 +708,19 @@ class DoubanRobot:
                 continue
 
             if r.status_code == 200:
-                logging.info('Okay, already up ' + item + ' topic' )
+                logging.info('Okay, already up %s topic', item)
 
-            logging.info("topic up:%s success, sleep 3's", item, post_data['rv_comment'])
-            time.sleep(3)  # Wait a minute to up next topic, You can modify it to delay longer time
+            html = etree.HTML(r.text)
+            logo = html.xpath("//div[@class='wrapper']/div[@id='header']/a[@class='logo']/text()")
+            if logo and logo[0] == '登录豆瓣':
+                #需要重登
+                raise Exception('relogin require')
+
+            if '检测到有异常请求从你的 IP 发出' in r.text:
+                raise Exception('IP check fail, try relogin.')
+            save_html('%s.html'%item, r.text)
+            logging.info("topic up:%s success:%s, sleep 3's", item, post_data['rv_comment'])
+            time.sleep(5*60)  # Wait a minute to up next topic, You can modify it to delay longer time
         return True
 
     def delete_comment(self, topic_id):
