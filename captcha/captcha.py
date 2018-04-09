@@ -7,7 +7,7 @@ web_host='0.0.0.0'
 web_port=9903
 
 app = flask.Flask(__name__)
-rds = redis.StrictRedis(host='127.0.0.1',port=52021,password=None)
+rds = redis.StrictRedis(host='127.0.0.1',port=52022,password='sany')
 
 @app.route('/')
 @app.route('/index')
