@@ -248,7 +248,7 @@ class DoubanRobot:
         #identify code id
         captcha_id = captcha[1]
         imgurl = "https://www.douban.com/misc/captcha?id={0}&size=s".format(captcha_id)
-        logging.info('post_url:%s, captcha url: %s', post_url, imgurl)
+        logging.info('post_url:%s, post_data:%s, captcha url: %s', post_url, str(post_data), imgurl)
         self.redis.set('captcha', captcha_id)
         
         reidentify = self.captcha_last and time.time() - self.captcha_last < 3
@@ -419,7 +419,7 @@ class DoubanRobot:
             logging.info('Okay, talk_status: "%s" post successfully !'%content)
             return True
 
-    def broadcast_mail(self, m_text):
+    def broadcast_mail(self, m_text, page_num=0):
         '''
         doumail topics
         '''
@@ -427,26 +427,19 @@ class DoubanRobot:
             logging.error('ck is invalid!')
             return 0
 
-        post_data = {
-                'ck' : self.ck,
-                }
-        post_url = "https://www.douban.com/doumail/#topics"
-        self.session.headers["Referer"] = post_url
-        r = self.session.post(post_url, post_data, cookies=self.session.cookies.get_dict())
+        post_url = "https://www.douban.com/doumail/?start=%s"%(page_num*20)
+
+        r = self.session.get(post_url, cookies=self.session.cookies.get_dict())
         #save_html('doumail.html', r.text)
 
-        content = re.findall(r'(<div id="content">.*?)\s*<div id=".*?">', r.text, re.DOTALL)[0]
-
-        soup = bs4.BeautifulSoup(content, "html.parser")
-        mail_list = []
-        for tag in soup.div.div.div.form.descendants:
-            if type(tag) != bs4.element.Tag or tag.name != 'li':
+        html = etree.HTML(r.text)
+        from_uid = html.xpath("//div[@class='doumail-list']//div[@class='select']/input[@type='checkbox']/@value")
+        from_name = html.xpath("//div[@class='doumail-list']//div[@class='title']/div[@class='sender']/span[@class='from']/text()")
+        for uid, name in zip(from_uid, from_name):
+            if name == '[已注销]':
                 continue
-            mail_list.append(tag)
 
-        for mail in mail_list :
-            msg = re.search(r'<a class="url" href="https://www.douban.com/doumail/(\d*)/">', mail.prettify(), re.DOTALL)
-            self.send_mail(msg, m_text)
+            self.send_mail(uid, m_text)
 
     def answer_unread_mail(self, unread=True):
         '''
@@ -457,34 +450,17 @@ class DoubanRobot:
             return 0
 
         #1. unread mail
-        post_data = {
-                'ck' : self.ck,
-                }
-        post_url = "https://www.douban.com/doumail/#topics"
-        self.session.headers["Referer"] = post_url
-        r = self.session.post(post_url, post_data, cookies=self.session.cookies.get_dict())
+        post_url = "https://www.douban.com/doumail/?start=0"
+        r = self.session.get(post_url, cookies=self.session.cookies.get_dict())
 
         mail_nums = 0
         # save_html('unread_mail.html', r.text)
-        content = re.findall(r'(<div id="content">.*?)\s*<div id=".*?">', r.text, re.DOTALL)[0]
-        soup = bs4.BeautifulSoup(content, "html.parser")
-        mail_list = []
-        for tag in soup.div.div.div.form.descendants:
-            if type(tag) != bs4.element.Tag or tag.name != 'li':
+        html = etree.HTML(r.text)
+        from_uid = html.xpath("//div[@class='doumail-list']/ul/li[@class='state-unread']/div[@class='select']/input[@type='checkbox']/@value")
+        from_name = html.xpath("//div[@class='doumail-list']/ul/li[@class='state-unread']/div[@class='title']/div[@class='sender']/span[@class='from']/text()")
+        for uid, name in zip(from_uid, from_name):
+            if name == '[已注销]':
                 continue
-            mail_list.append(tag)
-
-        for mail in mail_list :
-            if not 'class' in mail.attrs or mail.attrs['class'][0] != 'state-unread':
-                continue
-
-            # unread mail
-            msg = re.search(r'<a class="url" href="https://www.douban.com/doumail/(\d*)/">', mail.prettify(), re.DOTALL)
-
-            #system mail, ignore
-            if not msg:
-                continue
-            uid = msg[1]
 
             #send mail back to uid
             b_ans = self.answer_mail(uid)
@@ -527,7 +503,7 @@ class DoubanRobot:
 
         #first mail
         if msg_id == 0:
-            chat_msg = u'夏文表妹是机器人，如果她在你发的帖下打扰到你，请允许我在这里向你道歉。\n\r  假如你觉得表妹挺有意思的话，不妨多和她聊聊呗。\n\r  豆瓣的接口限制了访问频率，邮件回复可能没办法太快，请多多包涵。\n\r磁力搜索网站已经停止解析，个人地址可以私信表妹:"网站链接".  欢迎下次光临⚆_⚆\n\r'
+            chat_msg = u'夏文表妹是机器人，如果她在你发的帖下打扰到你，请允许我在这里向你道歉。\n\r  假如你觉得表妹挺有意思的话，不妨多和她聊聊呗。\n\r  豆瓣的接口限制了访问频率，邮件回复可能没办法太快，请多多包涵。\n\r磁力搜索网站已经停止解析，个人地址可以私信表妹:"网站链接".  欢迎下次光临⚆_⚆\n\r\n\r最近受人所托推广一个靠谱小组的微信群：https://www.douban.com/group/topic/114719268/。 \n\r很自由的交(xiang)友(qin)群，无权利无义务。\n\r在里面潜水挺有意思的。\n\r有兴趣不妨看一下。\n\r'
             send_res = self.send_mail(uid, chat_msg)
 
 
@@ -631,11 +607,11 @@ class DoubanRobot:
 
         post_data = {
                 "ck" : self.ck,
-                "m_submit" : "好了，寄出去",
                 "m_text" : '表妹：' + content,
+                "m_submit" : '好了，寄出去',
                 "to" : uid,
                 }
-        self.session.headers["Referer"] = "https://www.douban.com/doumail/"
+        #self.session.headers["Referer"] = "https://www.douban.com/doumail"
         post_url = self.mail_url
         r = self.session.post(post_url, post_data, cookies=self.session.cookies.get_dict())
 
@@ -646,11 +622,12 @@ class DoubanRobot:
             if r.url == "https://www.douban.com/doumail/":
                 #doumail/write success
                 logging.info('Okay, send_mail: To %s doumail "%s" successfully !', uid, r.url)
+                save_html('send_mail.html', r.text)
             elif r.url == "https://www.douban.com/j/doumail/send":
                 res = json.loads(r.text)
                 if "error" in res:
-                    logging.error('send_mail fail, url:j/doumail/send, got error!!')
-                    self.mail_switch()
+                    logging.error('send_mail fail, url:j/doumail/send, got error!!, post_data:%s, r.error:%s', str(post_data), res['error'])
+                    save_html('j_doumail_send.html', r.text)
                     return False
                 if "r" in res and res["r"] != 0:
                     logging.error('send_mail fail, url:j/doumail/send, text:%s', r.text)
@@ -659,14 +636,12 @@ class DoubanRobot:
 
                 logging.info('Okay, send_mail: To %s doumail "%s", %s', uid, r.url, r.text)
             else:
-                # save_html('mail_error1.html', r.text)
+                save_html('mail_error1.html', r.text)
                 logging.error('send_mail fail, to uid:%s, url:%s', uid, r.url)
-                self.mail_switch()
                 return False
         except Exception as e:
             logging.error('send_mail identify err:%s! not try again', traceback.format_exc() )
             # save_html('mail_error2.html', r.text)
-            self.mail_switch()
             return False
 
         return True
