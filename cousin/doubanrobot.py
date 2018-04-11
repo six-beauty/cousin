@@ -45,11 +45,11 @@ class captcha_mail:
     def send_mail(self, post_url, captcha_url):
         content = """
         -----------------begin---------------------------
-        douban work, post_url: %s
+        [self topic]douban work, post_url: %s
 
         captcha url: %s
 
-        captcha code input: http://120.24.59.86:9903/
+        captcha code input: http://121.196.207.196:9903/
 
         captcha time: %s
         ------------------end----------------------------
@@ -66,7 +66,7 @@ class captcha_mail:
         self.smtp.sendmail(self.from_addr, self.to_addr, mail_msg.as_string())  
 ##send_mail
 
-redis_port=52021
+redis_port=52022
 COOKIES_FILE = 'data/cookies.txt'
 emoji_re = re.compile(u'('
         u'\ud83c[\udf00-\udfff]|'
@@ -98,7 +98,7 @@ class DoubanRobot:
         #turing
         self.turi = turibot.chat_turi()
         #redis
-        self.redis = redis.StrictRedis(host='localhost', port=redis_port)    
+        self.redis = redis.StrictRedis(host='localhost', port=redis_port, password='sany')    
 
         #itchat thread
         self.capt_queue = queue.Queue(1)
@@ -264,7 +264,7 @@ class DoubanRobot:
             tt = threading.Thread(target=self.input_captcha)
             tt.start()
 
-            vcode=None
+            vcode, retry_time = None, 0
             while True:
                 try:
                     logging.info('wait for code input:')
@@ -294,6 +294,9 @@ class DoubanRobot:
 
                         else:
                             break
+                retry_time = retry_time + 1
+                if retry_time >= 3:
+                    raise Exception('/login wait break:%s'%retry_time)
         else:
             vcode = self.captcha.captcha_juhe(imgurl)
             logging.info('captcha_juhe get captcha:%s', vcode)
@@ -486,6 +489,9 @@ class DoubanRobot:
             if b_ans and mail_nums % 4 == 0:
                 logging.info("rds unread mail times:%s, sleep 60's", mail_nums)
                 time.sleep(60)
+                if mail_nums >= 8:
+                    #不要太多次
+                    return mail_nums
             else:
                 time.sleep(1)
             uid = self.redis.lpop('unread_mail')
@@ -1039,7 +1045,7 @@ def monitor_work(douban, circle_num):
 def work(hotReload=False):
     global circle_times
     account_id =  '15989010132'    # your account no (E-mail or phone number)
-    password   =  'douban214008'    # your account password
+    password   =  'douban9394'    # your account password
     douban_id  =  '161638302'    # your id number
 
     douban = DoubanRobot(account_id, password, douban_id, hotReload=hotReload)
@@ -1105,8 +1111,14 @@ def work(hotReload=False):
             circle_times = circle_times + 1
             tt.join()
 
-            time.sleep(15*60)
-            douban = DoubanRobot(account_id, password, douban_id)
+            if 'Remote end closed connection without response' in traceback.format_exc():
+                time.sleep(10*60)
+                logging.info("Remote and closed connection, try reconnect after 10*60's")
+                douban = DoubanRobot(account_id, password, douban_id, hotReload=True)
+            else:
+                time.sleep(15*60)
+                douban = DoubanRobot(account_id, password, douban_id)
+
             tt = threading.Thread(target=monitor_work, args=(douban, circle_times))
             tt.start()
 

@@ -8,7 +8,7 @@ then
     echo 'doubanrobot work still running, '${#run_status}
     exit 0
 else
-    nohup python3 doubanrobot.py > /dev/null 2>&1 &
+    nohup python doubanrobot.py > /dev/null 2>&1 &
     echo 'doubanrobot work stop('${#run_status}'), start work!'$(date +"%H:%M:%S")
 fi
 
