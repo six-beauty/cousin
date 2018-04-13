@@ -128,7 +128,6 @@ class DoubanRobot:
                 }
         self.session = requests.Session()
         self.login_url = 'https://www.douban.com/accounts/login'
-        self.mail_url = "https://www.douban.com/j/doumail/send"
 
         self.session.headers = {
                 "Connection": "keep-alive",
@@ -595,14 +594,6 @@ class DoubanRobot:
             self.redis.set('mail:%s'%(uid), int(max_id))
         return True
 
-    def mail_switch(self):
-        logging.warning('send mail url switch, url:%s', self.mail_url)
-        if self.mail_url == "https://www.douban.com/j/doumail/send":
-            self.mail_url = "https://www.douban.com/doumail/write"
-        else:
-            self.mail_url = "https://www.douban.com/j/doumail/send"
-
-
     def send_mail(self, uid, content = '测试豆油，keep moving!'):
         '''
         send a doumail to other.
@@ -618,7 +609,7 @@ class DoubanRobot:
                 "to" : uid,
                 }
         #self.session.headers["Referer"] = "https://www.douban.com/doumail"
-        post_url = self.mail_url
+        post_url = "https://www.douban.com/j/doumail/send"
         r = self.session.post(post_url, post_data, cookies=self.session.cookies.get_dict())
 
         # 验证码
@@ -634,9 +625,14 @@ class DoubanRobot:
                 if "error" in res:
                     logging.error('send_mail fail, url:j/doumail/send, got error!!, post_data:%s, r.error:%s', str(post_data), res['error'])
                     save_html('j_doumail_send.html', r.text)
-                    return False
+
+                    #换一个方法， send one more time
+                    post_url = "https://www.douban.com/doumail/write"
+                    self.session.post(post_url, post_data, cookies=self.session.cookies.get_dict())
+                    return True 
                 if "r" in res and res["r"] != 0:
                     logging.error('send_mail fail, url:j/doumail/send, text:%s', r.text)
+
                     self.login()
                     return False
 
