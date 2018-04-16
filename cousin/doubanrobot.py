@@ -32,7 +32,7 @@ class captcha_mail:
     def __init__(self):
         self.from_addr = 'sanyue9394@126.com'
         self.from_passwd = 'sanyue214008'
-        self.to_addr = ['sanyue9394@126.com']
+        self.to_addr = ['315148032@qq.com', 'sanyue9394@126.com']
 
         self.smtp=smtplib.SMTP()  
         self.smtp.connect('smtp.126.com','25')  
@@ -49,7 +49,7 @@ class captcha_mail:
 
         captcha url: %s
 
-        captcha code input: http://121.196.207.196:9903/
+        captcha code input: http://47.98.177.0:9903/
 
         captcha time: %s
         ------------------end----------------------------
@@ -66,7 +66,7 @@ class captcha_mail:
         self.smtp.sendmail(self.from_addr, self.to_addr, mail_msg.as_string())  
 ##send_mail
 
-redis_port=52022
+redis_port=52021
 COOKIES_FILE = 'data/cookies.txt'
 emoji_re = re.compile(u'('
         u'\ud83c[\udf00-\udfff]|'
