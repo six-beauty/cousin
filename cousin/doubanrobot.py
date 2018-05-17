@@ -30,17 +30,18 @@ import email.utils
 
 class captcha_mail:
     def __init__(self):
-        self.from_addr = 'sanyue9394@126.com'
+        self.from_addr = 'sanyue9394@aliyun.com'
         self.from_passwd = 'sanyue214008'
         self.to_addr = ['315148032@qq.com', 'sanyue9394@126.com']
 
-        self.smtp=smtplib.SMTP()  
-        self.smtp.connect('smtp.126.com','25')  
+        self.smtp=smtplib.SMTP_SSL()  
+        self.smtp.connect('smtp.aliyun.com','465')  
         self.smtp.login(self.from_addr, self.from_passwd)  
 
-
+    '''
     def __del__(self):
         self.smtp.quit()  
+    '''
 
     def send_mail(self, post_url, captcha_url):
         content = """
@@ -75,7 +76,7 @@ emoji_re = re.compile(u'('
         re.UNICODE)
 
 #self answer mail
-self_mail = [122619569, 54451019]
+self_mail = [122619569, 54451019, 135216243, 172045319]
 #self topics不回复
 my_topics = [106547648,111516608, 112933822, 112932149, 112933816, 112933934, 113515127, 113515502]
 #ignore topics
@@ -108,7 +109,7 @@ class DoubanRobot:
         #wait input 间隔
         self.captcha_last = time.time()
         #发送邮件间隔
-        self.mail_interval = time.time()
+        self.mail_interval = 0
 
         self.sofa_dic = {}
         self.doumail_dic = {}
@@ -187,8 +188,10 @@ class DoubanRobot:
         '''
         if not r:
             r = self.session.get('https://www.douban.com/accounts/',cookies=self.session.cookies.get_dict())
+
         cookies = self.session.cookies.get_dict()
         headers = dict(r.headers)
+        #save_html('cookies.html',r.text)
         if 'ck' in cookies:
             self.ck = cookies['ck'].strip('"')
             logging.info("ck:%s" %self.ck)
@@ -197,7 +200,7 @@ class DoubanRobot:
             self.ck = None
             self.login()
         else:
-            logging.error('cannot get the ck. ')
+            logging.error('cannot get the ck.  %s', traceback.format_exc())
             raise Exception('cannot get the ck. ')
 
     def input_captcha(self):
@@ -252,11 +255,13 @@ class DoubanRobot:
         
         reidentify = self.captcha_last and time.time() - self.captcha_last < 3
         if r'/login' in post_url or reidentify:
-            if time.time() - self.mail_interval > 3*60:
+            interval = int(time.time() - self.mail_interval)
+            logging.error('captcha mail_interval:%s, %s',  interval, self.mail_interval)
+            if interval > 180:
+                logging.error('captcha wait for mail captcha:%s',  self.mail_interval)
                 #发送邮件间隔
                 capt = captcha_mail()
                 capt.send_mail(post_url, imgurl)
-                logging.error('captcha wait for mail captcha:%s',  self.mail_interval)
 
                 self.mail_interval = time.time()
 
@@ -329,11 +334,6 @@ class DoubanRobot:
 
         return r
 
-    def login_check(self):
-        if not self.ck:
-            logging.error('ck is invalid!')
-            raise Exception('login fail, ck is invalid')
-
     def login(self):
         '''
         login douban.com and save the cookies to file.
@@ -342,14 +342,20 @@ class DoubanRobot:
 
         self.session.headers["Referer"] = "https://www.douban.com/"
         r = self.session.post(self.login_url, data=self.data, cookies=self.session.cookies.get_dict())  #核心语句数据从其中传入
-        save_html('login.html', r.text)
 
         # 验证码
         try:
             r=self.identify_code_check(r, self.login_url, self.data)
         except Exception as e:
-            logging.error('login identify err:%s, try again!'%(e))
+            logging.error('login identify err:%s, %s, try again!'%(e, traceback.format_exc()))
             return 
+        save_html('login.html', r.text)
+        '''
+        if r'Your IP is restricted.' in r.text:
+            logging.error('login is ban by ip check!! sleep 3 hours..')
+            time.sleep(3*60*60)
+            return
+        '''
 
         #result
         if r.url == 'https://www.douban.com/':
@@ -377,7 +383,8 @@ class DoubanRobot:
         '''
         if not self.ck:
             logging.error('ck is invalid!')
-            return False
+            raise Exception('login fail, ck is invalid')
+
         group_url = "https://www.douban.com/group/" + group_id
         post_url = group_url + "/new_topic"
         post_data = {
@@ -407,7 +414,7 @@ class DoubanRobot:
         '''
         if not self.ck:
             logging.error('ck is invalid!')
-            return False
+            raise Exception('login fail, ck is invalid')
 
         post_data = {
                 'ck' : self.ck,
@@ -427,7 +434,7 @@ class DoubanRobot:
         '''
         if not self.ck:
             logging.error('ck is invalid!')
-            return 0
+            raise Exception('login fail, ck is invalid')
 
         post_url = "https://www.douban.com/doumail/?start=%s"%(page_num*20)
 
@@ -449,11 +456,13 @@ class DoubanRobot:
         '''
         if not self.ck:
             logging.error('ck is invalid!')
-            return 0
+            raise Exception('login fail, ck is invalid')
 
         #1. unread mail
         post_url = "https://www.douban.com/doumail/?start=0"
         r = self.session.get(post_url, cookies=self.session.cookies.get_dict())
+        if r'登录豆瓣' in r.text:
+            raise Exception('login check fail, need login again!')
 
         mail_nums = 0
         # save_html('unread_mail.html', r.text)
@@ -508,13 +517,13 @@ class DoubanRobot:
 
         #first mail
         if msg_id == 0:
-            chat_msg = u'夏文表妹是机器人，如果她在你发的帖下打扰到你，请允许我在这里向你道歉。\n\r  假如你觉得表妹挺有意思的话，不妨多和她聊聊呗。\n\r  豆瓣的接口限制了访问频率，邮件回复可能没办法太快，请多多包涵。\n\r磁力搜索网站已经停止解析，个人地址可以私信表妹:"网站链接".  欢迎下次光临⚆_⚆\n\r\n\r最近受人所托推广一个靠谱小组的微信群：https://www.douban.com/group/topic/114719268/。 \n\r很自由的交(xiang)友(qin)群，无权利无义务。\n\r在里面潜水挺有意思的。\n\r有兴趣不妨看一下。\n\r'
+            chat_msg = u'夏文表妹是机器人，如果她在你发的帖下打扰到你，请允许我在这里向你道歉。\n\r  假如你觉得表妹挺有意思的话，不妨多和她聊聊呗。\n\r  豆瓣的接口限制了访问频率，邮件回复可能没办法太快，请多多包涵。\n\r最近受人所托推广一个靠谱小组的微信群：https://www.douban.com/group/topic/114719268/。 \n\r很自由的交(xiang)友(qin)群，无权利无义务。\n\r在里面潜水挺有意思的。\n\r有兴趣不妨看一下。\n\r'
             send_res = self.send_mail(uid, chat_msg)
 
 
         if not self.ck:
             logging.error('ck is invalid!')
-            return False
+            raise Exception('login fail, ck is invalid')
 
         post_data = {
                 'ck' : self.ck,
@@ -567,7 +576,7 @@ class DoubanRobot:
 
                 #普通聊天消息
                 if '网站链接' in msg or '网站地址' in msg or '磁力链接' in msg:
-                    chat_msg = '番茄小说: http://tomatow.top/novel. \n\r磁力搜索网站链接: http://121.196.207.196:5002 , 请用电脑打开(如chorme浏览器),下载需要安装迅雷、torrent(磁力链接下载);\n\r可以的话，不妨关注一下。:)\n\r假如电影的话，推荐“至暗时刻”，记录片的“蓝色星球”也不错。小电影的话，关键字可以是“学妹、合集、小美女"等等，看你个人偏好吧。 如果有什么建议，不妨留言回复一下 :)\n\r'
+                    chat_msg = '番茄小说: http://tomatow.top/novel. \n\r磁力搜索网站链接: http://tomatow.top/magnetic , 请用电脑打开(如chorme浏览器),下载需要安装迅雷、torrent(磁力链接下载);\n\r可以的话，不妨关注一下。:)\n\r假如电影的话，推荐“至暗时刻”，记录片的“蓝色星球”也不错。小电影的话，关键字可以是“学妹、合集、小美女"等等，看你个人偏好吧。 如果有什么建议，不妨留言回复一下 :)\n\r'
                 elif "蒸" in msg or "征" in msg:
                     content = ['好看的皮囊三千一晚，有趣的灵魂要房要车。', '选我！选我！', '"别找了找不到的，你还在想些什么"', '除了有趣，还有什么别的具体要求吗']
                     chat_msg = random.choice[content]
@@ -600,7 +609,7 @@ class DoubanRobot:
         '''
         if not self.ck:
             logging.error('ck is invalid!')
-            return False
+            raise Exception('login fail, ck is invalid')
 
         post_data = {
                 "ck" : self.ck,
@@ -614,33 +623,28 @@ class DoubanRobot:
 
         # 验证码
         try:
-            r=self.identify_code_check(r, post_url, post_data)
+            res = json.loads(r.text)
+            if "error" in res:
+                logging.error('send_mail fail, url:j/doumail/send, got error!!, post_data:%s, r.error:%s', str(post_data), res['error'])
+                save_html('j_doumail_send.html', r.text)
 
-            if r.url == "https://www.douban.com/doumail/":
-                #doumail/write success
-                logging.info('Okay, send_mail: To %s doumail "%s" successfully !', uid, r.url)
-                save_html('send_mail.html', r.text)
-            elif r.url == "https://www.douban.com/j/doumail/send":
-                res = json.loads(r.text)
-                if "error" in res:
-                    logging.error('send_mail fail, url:j/doumail/send, got error!!, post_data:%s, r.error:%s', str(post_data), res['error'])
-                    save_html('j_doumail_send.html', r.text)
+                #换一个方法， send one more time
+                post_url = "https://www.douban.com/doumail/write"
+                r = self.session.post(post_url, post_data, cookies=self.session.cookies.get_dict())
 
-                    #换一个方法， send one more time
-                    post_url = "https://www.douban.com/doumail/write"
-                    self.session.post(post_url, post_data, cookies=self.session.cookies.get_dict())
-                    return True 
-                if "r" in res and res["r"] != 0:
-                    logging.error('send_mail fail, url:j/doumail/send, text:%s', r.text)
+                r=self.identify_code_check(r, post_url, post_data)
 
-                    self.login()
-                    return False
+                save_html('retry_mail.html', r.text)
 
-                logging.info('Okay, send_mail: To %s doumail "%s", %s', uid, r.url, r.text)
-            else:
-                save_html('mail_error1.html', r.text)
-                logging.error('send_mail fail, to uid:%s, url:%s', uid, r.url)
+                logging.error('send_mail retry once, url:doumail/write, r.url:%s, save retry_mail.html', r.url)
+                return True 
+            if "r" in res and res["r"] != 0:
+                logging.error('send_mail fail, url:j/doumail/send, text:%s', r.text)
+
+                self.login()
                 return False
+
+            logging.info('Okay, send_mail: To %s doumail "%s", %s', uid, r.url, r.text)
         except Exception as e:
             logging.error('send_mail identify err:%s! not try again', traceback.format_exc() )
             # save_html('mail_error2.html', r.text)
@@ -663,7 +667,7 @@ class DoubanRobot:
         '''
         if not self.ck:
             logging.error('ck is invalid!')
-            return False
+            raise Exception('login fail, ck is invalid')
 
 
         # For example --> topics_list = ['22836371','98569169']
@@ -703,7 +707,7 @@ class DoubanRobot:
     def delete_comment(self, topic_id):
         if not self.ck:
             logging.error('ck is invalid!')
-            return False
+            raise Exception('login fail, ck is invalid')
 
         for page in range(0, 1000, 100):
             post_url = "https://www.douban.com/group/topic/%s/?start=%s"%(topic_id, page)
@@ -779,7 +783,7 @@ class DoubanRobot:
     def sofa(self, times=0):
         if not self.ck:
             logging.error('ck is invalid!')
-            return 0
+            raise Exception('login fail, ck is invalid')
 
         if self.sofa_queue.empty():
             return 0
@@ -836,7 +840,7 @@ class DoubanRobot:
         '''
         if not self.ck:
             logging.error('ck is invalid!')
-            return 0
+            raise Exception('login fail, ck is invalid')
 
         post_data = {
                 'ck' : self.ck,
@@ -844,6 +848,8 @@ class DoubanRobot:
         post_url = "https://www.douban.com/notification/"
         self.session.headers["Referer"] = post_url
         r = self.session.post(post_url, post_data, cookies=self.session.cookies.get_dict())
+        if r'登录豆瓣' in r.text:
+            raise Exception('login check fail, need login again!')
         #save_html('notifycation.html', r.text)
 
         notifys = re.findall(r'<div id="reply_notify_(\d*)" class="item-req ">.*?<a href="https://www.douban.com/group/topic/(\d*)/\?start=(\d*)#(\d*)" target="_blank">.*?</a>(.*?)\n', r.text, re.DOTALL)
@@ -937,7 +943,7 @@ class DoubanRobot:
         '''
         if not self.ck:
             logging.error('ck is invalid!')
-            return
+            raise Exception('login fail, ck is invalid')
 
         post_data = {
                 'ck' : self.ck,
@@ -1041,7 +1047,7 @@ def monitor_work(douban, circle_num):
 def work(hotReload=False):
     global circle_times
     account_id =  '15989010132'    # your account no (E-mail or phone number)
-    password   =  'douban9394'    # your account password
+    password   =  'douban214008'    # your account password
     douban_id  =  '161638302'    # your id number
 
     douban = DoubanRobot(account_id, password, douban_id, hotReload=hotReload)
@@ -1050,8 +1056,6 @@ def work(hotReload=False):
 
     while True:
         try:
-            douban.login_check()
-
             #循环处理多少次
             times_unread_mail, times_unread_notify, times_sofa = 5, 3, 3
             while times_unread_mail > 0 or times_unread_notify > 0 or times_sofa > 0:

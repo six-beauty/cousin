@@ -244,7 +244,7 @@ class Captcha():
             os.makedirs('imgs/')
 
     def baidubce_token(self):
-        req_data = {"grant_type":"client_credentials", "client_id":"GmFZoZKX4N9y6o3huUZqb1GO", "client_secret":"oj9SM6QSseATsyukkLSaPpOHQjIwskog"}
+        req_data = {"grant_type":"client_credentials", "client_id":"5DZ2ce7lpPjk03Yd0kZH9xI0", "client_secret":"BIkiH18AQPiGNZagUrtjcjBR6c9kf6PF"}
 
         #url = 'https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id=DilGKoUGT7MhK3yPeSGQwvNC&client_secret=yePTFhz5EPG0OM7229mYGugg1EkL7alh'
         r = self.session.get('https://aip.baidubce.com/oauth/2.0/token', params=req_data)
@@ -389,7 +389,7 @@ class Captcha():
 
 if __name__ == '__main__':
     captcha = Captcha()
-    capt2 = captcha.captcha_juhe('http://120.24.59.86:9903/static/imgs/captcha-2.jpg')
+    capt2 = captcha.captcha_juhe('http://47.98.177.0:9903/static/captcha.png')
     print(capt2)
     '''
     captlist = os.listdir('imgs/')
