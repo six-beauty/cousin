@@ -29,10 +29,13 @@ import email.mime.text
 import email.utils
 
 class captcha_mail:
-    def __init__(self):
+    def __init__(self, addr=None):
         self.from_addr = 'sanyue9394@aliyun.com'
         self.from_passwd = 'sanyue214008'
         self.to_addr = ['315148032@qq.com', 'sanyue9394@126.com']
+
+        if addr:
+            self.to_addr.append(addr)
 
         self.smtp=smtplib.SMTP_SSL()  
         self.smtp.connect('smtp.aliyun.com','465')  
@@ -256,12 +259,16 @@ class DoubanRobot:
         reidentify = self.captcha_last and time.time() - self.captcha_last < 3
         if r'/login' in post_url or reidentify:
             interval = int(time.time() - self.mail_interval)
-            logging.error('captcha mail_interval:%s, %s',  interval, self.mail_interval)
+            logging.error('captcha mail_interval:%s, %s',  interval>180, self.mail_interval)
             if interval > 180:
                 logging.error('captcha wait for mail captcha:%s',  self.mail_interval)
                 #发送邮件间隔
-                capt = captcha_mail()
-                capt.send_mail(post_url, imgurl)
+                if r'/login' in post_url:
+                    capt = captcha_mail('939445950@qq.com')
+                    capt.send_mail(post_url, imgurl)
+                else:
+                    capt = captcha_mail()
+                    capt.send_mail(post_url, imgurl)
 
                 self.mail_interval = time.time()
 
@@ -489,6 +496,9 @@ class DoubanRobot:
         while uid:
             uid = uid.decode('utf-8')
 
+            if uid == 'system':
+                continue
+
             #send mail back to uid
             b_ans = self.answer_mail(uid)
             if b_ans:
@@ -525,12 +535,9 @@ class DoubanRobot:
             logging.error('ck is invalid!')
             raise Exception('login fail, ck is invalid')
 
-        post_data = {
-                'ck' : self.ck,
-                }
         post_url = "https://www.douban.com/doumail/{0}/".format(uid)
         self.session.headers["Referer"] = post_url
-        r = self.session.post(post_url, post_data, cookies=self.session.cookies.get_dict())
+        r = self.session.get(post_url, cookies=self.session.cookies.get_dict())
 
         mails = re.findall(r'<div class="chat".*?data="(.*?)">.*?<div class="content">.*?<a href="https://www.douban.com/people/(.*?)/">.*?<p>(.*?)</p>', r.text, re.DOTALL)
 
@@ -614,24 +621,28 @@ class DoubanRobot:
         post_data = {
                 "ck" : self.ck,
                 "m_text" : '表妹：' + content,
-                "m_submit" : '好了，寄出去',
+                "m_image" : '',
                 "to" : uid,
                 }
-        #self.session.headers["Referer"] = "https://www.douban.com/doumail"
+        self.session.headers["Referer"] = "https://www.douban.com/doumail/%s/"%(uid)
         post_url = "https://www.douban.com/j/doumail/send"
-        r = self.session.post(post_url, post_data, cookies=self.session.cookies.get_dict())
 
-        # 验证码
         try:
+            r = self.session.post(post_url, post_data, cookies=self.session.cookies.get_dict(), timeout=10)
+            # 验证码
+            r=self.identify_code_check(r, post_url, post_data)
+
             res = json.loads(r.text)
             if "error" in res:
                 logging.error('send_mail fail, url:j/doumail/send, got error!!, post_data:%s, r.error:%s', str(post_data), res['error'])
                 save_html('j_doumail_send.html', r.text)
 
                 #换一个方法， send one more time
-                post_url = "https://www.douban.com/doumail/write"
+                post_data['m_submit'] = '好了，寄出去'
+                post_url = "https://www.douban.com/doumail/write?to=%s"%(uid)
                 r = self.session.post(post_url, post_data, cookies=self.session.cookies.get_dict())
 
+                # 验证码
                 r=self.identify_code_check(r, post_url, post_data)
 
                 save_html('retry_mail.html', r.text)
@@ -842,12 +853,9 @@ class DoubanRobot:
             logging.error('ck is invalid!')
             raise Exception('login fail, ck is invalid')
 
-        post_data = {
-                'ck' : self.ck,
-                }
         post_url = "https://www.douban.com/notification/"
         self.session.headers["Referer"] = post_url
-        r = self.session.post(post_url, post_data, cookies=self.session.cookies.get_dict())
+        r = self.session.get(post_url, cookies=self.session.cookies.get_dict())
         if r'登录豆瓣' in r.text:
             raise Exception('login check fail, need login again!')
         #save_html('notifycation.html', r.text)
@@ -883,10 +891,9 @@ class DoubanRobot:
             return False
 
         if not exists:
-            post_data = { 'ck' : self.ck, }
             post_url = "https://www.douban.com/group/topic/{0}/?start={1}#{2}".format(topic_id, start, cid)
             self.session.headers["Referer"] = post_url
-            r = self.session.post(post_url, post_data, cookies=self.session.cookies.get_dict())
+            r = self.session.get(post_url, cookies=self.session.cookies.get_dict())
 
             topics = re.findall(r'data-cid="{0}".*?<div class="reply-quote">.*?<p class="">(.*?)</p>.*?<div class="operation_div" id="(\d*)">'.format(cid), r.text, re.DOTALL)
 
@@ -945,12 +952,9 @@ class DoubanRobot:
             logging.error('ck is invalid!')
             raise Exception('login fail, ck is invalid')
 
-        post_data = {
-                'ck' : self.ck,
-                }
         post_url = "https://www.douban.com/group/GuangZhoulove/discussion?start=%s"%(start_id)
         self.session.headers["Referer"] = post_url
-        r = self.session.post(post_url, post_data, cookies=self.session.cookies.get_dict())
+        r = self.session.get(post_url, cookies=self.session.cookies.get_dict())
 
         notifys = re.findall(r'<td class="title">.*?<a href="https://www.douban.com/group/topic/(\d*)/" title="(.*?)".*?class="time">(.*?)</td>', r.text, re.DOTALL)
         for notify in notifys:
