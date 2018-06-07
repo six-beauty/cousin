@@ -32,8 +32,7 @@ class captcha_mail:
     def __init__(self, addr=None):
         self.from_addr = 'sanyue9394@aliyun.com'
         self.from_passwd = 'sanyue214008'
-        self.to_addr = ['315148032@qq.com', 'sanyue9394@126.com']
-
+        self.to_addr = ['sanyue9394@126.com']
         if addr:
             self.to_addr.append(addr)
 
@@ -113,6 +112,8 @@ class DoubanRobot:
         self.captcha_last = time.time()
         #发送邮件间隔
         self.mail_interval = 0
+        #login captcha发送次数
+        self.captcha_login = 0
 
         self.sofa_dic = {}
         self.doumail_dic = {}
@@ -256,21 +257,26 @@ class DoubanRobot:
         logging.info('post_url:%s, post_data:%s, captcha url: %s', post_url, str(post_data), imgurl)
         self.redis.set('captcha', captcha_id)
         
-        reidentify = self.captcha_last and time.time() - self.captcha_last < 3
+        reidentify = self.captcha_last and time.time() - self.captcha_last < 1
         if r'/login' in post_url or reidentify:
             interval = int(time.time() - self.mail_interval)
-            logging.error('captcha mail_interval:%s, %s',  interval>180, self.mail_interval)
-            if interval > 180:
-                logging.error('captcha wait for mail captcha:%s',  self.mail_interval)
+            logging.error('captcha mail_interval:%s',  interval)
+            if interval > 3*3600:
                 #发送邮件间隔
                 if r'/login' in post_url:
-                    capt = captcha_mail('939445950@qq.com')
+                    self.captcha_login = self.captcha_login + 1
+
+                if self.captcha_login >=3:
+                    capt = captcha_mail(addr='939445950@qq.com')
                     capt.send_mail(post_url, imgurl)
+
+                    self.captcha_login = 0
                 else:
                     capt = captcha_mail()
                     capt.send_mail(post_url, imgurl)
 
                 self.mail_interval = time.time()
+
 
             tt = threading.Thread(target=self.input_captcha)
             tt.start()
@@ -477,7 +483,7 @@ class DoubanRobot:
         from_uid = html.xpath("//div[@class='doumail-list']/ul/li[@class='state-unread']/div[@class='select']/input[@type='checkbox']/@value")
         from_name = html.xpath("//div[@class='doumail-list']/ul/li[@class='state-unread']/div[@class='title']/div[@class='sender']/span[@class='from']/text()")
         for uid, name in zip(from_uid, from_name):
-            if name == '[已注销]':
+            if uid == 'system' or name == '[已注销]':
                 continue
 
             #send mail back to uid
@@ -547,7 +553,7 @@ class DoubanRobot:
 
             #一次不回复太多消息
             if mail_id <= msg_id:
-                #logging.info("continue mail_id:%s, msg_id:%s, uid:%s, msg:%s", mail_id, msg_id, send_uid, msg)
+                logging.info("continue mail_id:%s, msg_id:%s, uid:%s, msg:%s", mail_id, msg_id, send_uid, msg)
                 continue
 
             if send_uid == self.douban_id:
@@ -586,7 +592,7 @@ class DoubanRobot:
                     chat_msg = '番茄小说: http://tomatow.top/novel. \n\r磁力搜索网站链接: http://tomatow.top/magnetic , 请用电脑打开(如chorme浏览器),下载需要安装迅雷、torrent(磁力链接下载);\n\r可以的话，不妨关注一下。:)\n\r假如电影的话，推荐“至暗时刻”，记录片的“蓝色星球”也不错。小电影的话，关键字可以是“学妹、合集、小美女"等等，看你个人偏好吧。 如果有什么建议，不妨留言回复一下 :)\n\r'
                 elif "蒸" in msg or "征" in msg:
                     content = ['好看的皮囊三千一晚，有趣的灵魂要房要车。', '选我！选我！', '"别找了找不到的，你还在想些什么"', '除了有趣，还有什么别的具体要求吗']
-                    chat_msg = random.choice[content]
+                    chat_msg = random.choice(content)
                 else:
                     chat_msg = self.get_chat(msg, uid)
 
@@ -617,6 +623,10 @@ class DoubanRobot:
         if not self.ck:
             logging.error('ck is invalid!')
             raise Exception('login fail, ck is invalid')
+
+        if int(uid) == 1614631:
+            logging.error('--send_mail 1614631 :%s', traceback.format_stack()[0])
+            return True
 
         post_data = {
                 "ck" : self.ck,
@@ -860,13 +870,18 @@ class DoubanRobot:
             raise Exception('login check fail, need login again!')
         #save_html('notifycation.html', r.text)
 
-        notifys = re.findall(r'<div id="reply_notify_(\d*)" class="item-req ">.*?<a href="https://www.douban.com/group/topic/(\d*)/\?start=(\d*)#(\d*)" target="_blank">.*?</a>(.*?)\n', r.text, re.DOTALL)
+        notifys = re.findall(r'<div id="reply_notify_(\d*)" class="item-req ">.*?<a href="https://www.douban.com/group/topic/(\d*)/\?start=(\d*)#(\d*)" target="_blank">(.*?)</a>(.*?)\n', r.text, re.DOTALL)
 
         notify_nums = 0
         for notify in notifys:
-            notify_id, topic_id, start, cid, msg= notify[0], notify[1], notify[2], notify[3], notify[4]
+            notify_id, topic_id, start, cid, short, short = notify[0], notify[1], notify[2], notify[3], notify[4], notify[5]
 
-            if int(topic_id) in my_topics or int(topic_id) in ignore_topics or '赞' in msg:
+            if int(topic_id) in my_topics or int(topic_id) in ignore_topics:
+                continue
+
+            #点赞的评论
+            if '赞' in short:
+                self.answer_like(notify_id, topic_id, start, cid)
                 continue
 
             b_ans = self.answer_notify(notify_id, topic_id, start, cid)
@@ -882,6 +897,28 @@ class DoubanRobot:
         time.sleep(3)
 
         return notify_nums
+
+    def answer_like(self, notify_id, topic_id, start, cid):
+        exists = notify_id in self.notify_dic
+        if not exists:
+            exists = self.redis.exists('notify:%s'%notify_id)
+        else:
+            return False
+        
+        if not exists:
+            logging.info('--add like, notify:https://www.douban.com/group/topic/%s/?start=%s#%s, 有了1次赞', topic_id, start, cid)
+            like_key = 'notify_like'
+            cid_key = r'%s/?start=%s#%s'%(topic_id, start, cid)
+            self.redis.zincrby(like_key, cid_key, 1)
+
+            self.redis.set('notify:%s'%notify_id, 1)
+            self.notify_dic[notify_id] = True
+        else:
+            self.notify_dic[notify_id] = True
+            return False
+
+        return True
+
 
     def answer_notify(self, notify_id, topic_id, start, cid):
         exists = notify_id in self.notify_dic
