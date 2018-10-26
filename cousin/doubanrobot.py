@@ -28,11 +28,18 @@ import email.mime.multipart
 import email.mime.text  
 import email.utils
 
+# 1. 启动机器人前，需要把验证码处理网站也打开,就是绑定了 http://47.98.177.0:9903/ 那个进程。 
+    #目录：/home/hero/git_cousin/cousin/captcha， 执行run.sh (crontab 里面有配置，会定时执行，预防它挂掉)
+
+
+# 验证码通知模块，当自动检测验证码不成功n次(或登录验证码)，会发邮件通知， 人工处理
 class captcha_mail:
     def __init__(self, addr=None):
         self.from_addr = 'sanyue9394@aliyun.com'
         self.from_passwd = 'sanyue214008'
-        self.to_addr = ['sanyue9394@126.com']
+
+        #接收邮件的地址， 是个list, 可以填多个地址
+        self.to_addr = ['597688801@qq.com']
         if addr:
             self.to_addr.append(addr)
 
@@ -78,17 +85,14 @@ emoji_re = re.compile(u'('
         re.UNICODE)
 
 #self answer mail
-self_mail = [122619569, 54451019, 135216243, 172045319]
+self_mail = []
 #self topics不回复
 my_topics = [106547648,111516608, 112933822, 112932149, 112933816, 112933934, 113515127, 113515502]
 #ignore topics
-ignore_topics = [106547305, 106547516, 106551311, 113673437, 103217103, 63920532]
-lokiok=52272009
+ignore_topics = [106547305, 106547516, 106551311, 113673437, 103217103, 63920532, 154616682]
 
 #不回复的豆瓣id
 ignore_topic_douban_id = [102393339, 167730677, 168373780]
-#雪亭
-#ignore_topic_douban_id.append(52272009)
 
 alive=False
 class DoubanRobot:
@@ -112,8 +116,8 @@ class DoubanRobot:
         self.captcha_last = time.time()
         #发送邮件间隔
         self.mail_interval = 0
-        #login captcha发送次数
-        self.captcha_login = 0
+        #自动识别失败次数
+        self.mail_fail = 0
 
         self.sofa_dic = {}
         self.doumail_dic = {}
@@ -148,9 +152,11 @@ class DoubanRobot:
     def get_chat(self, msg, uid):
         if '表妹' in msg or '夏文' in msg:
             if msg == '表妹' or msg == '夏文':
+                #无意义的喊话， 换成向机器人打招呼
                 content = [u'你好', u'你是谁', u'在吗']
                 msg = random.choice(content)
             else:
+                #替换名称， 让图灵机器人识别(机器人不知'表妹'是在叫它)
                 msg = msg.replace('表妹', '你')
                 msg = msg.replace('夏文', '你')
         chat_msg = self.turi.get_chat(msg, uid)
@@ -201,12 +207,12 @@ class DoubanRobot:
             logging.info("ck:%s" %self.ck)
         elif 'Set-Cookie' in headers:
             logging.info('cookies is end of date, login again')
-            self.ck = None
             self.login()
         else:
             logging.error('cannot get the ck.  %s', traceback.format_exc())
             raise Exception('cannot get the ck. ')
 
+    #独立开个线程，从redis 读入数据。 redis 数据在9903 写入， 人工识别验证码
     def input_captcha(self):
         global alive
         if alive:
@@ -257,26 +263,23 @@ class DoubanRobot:
         logging.info('post_url:%s, post_data:%s, captcha url: %s', post_url, str(post_data), imgurl)
         self.redis.set('captcha', captcha_id)
         
+        self.mail_fail += 1
+        #reidentify 防止同一个验证码，一直处理不了的情况(captcha_juhe返回None时会重新进identify_code_check, 用时间来判断是不是同一个的)
         reidentify = self.captcha_last and time.time() - self.captcha_last < 1
+        #识别验证码失败， 或者触发了豆瓣登陆校验逻辑
         if r'/login' in post_url or reidentify:
             interval = int(time.time() - self.mail_interval)
-            logging.error('captcha mail_interval:%s',  interval)
-            if interval > 3*3600:
-                #发送邮件间隔
-                if r'/login' in post_url:
-                    self.captcha_login = self.captcha_login + 1
+            logging.info('captcha mail_interval:%s',  interval)
 
-                if self.captcha_login >=3:
-                    capt = captcha_mail(addr='939445950@qq.com')
-                    capt.send_mail(post_url, imgurl)
-
-                    self.captcha_login = 0
-                else:
-                    capt = captcha_mail()
-                    capt.send_mail(post_url, imgurl)
+            # 上一次是30分钟前或是登陆验证的，发邮件通知处理验证码
+            if interval > 3*60*60 and self.mail_fail > 3 or r'/login' in post_url:
+                logging.info('captcha login mail, notify qq！')
+                capt = captcha_mail()
+                capt.send_mail(post_url, imgurl)
 
                 self.mail_interval = time.time()
 
+                self.mail_fail = 0
 
             tt = threading.Thread(target=self.input_captcha)
             tt.start()
@@ -284,6 +287,7 @@ class DoubanRobot:
             vcode, retry_time = None, 0
             while True:
                 try:
+                    # 从queue 拿到验证码
                     logging.info('wait for code input:')
                     vcode=self.capt_queue.get(timeout=32*60)
                     logging.info('capt_queue get vcode:%s', vcode)
@@ -313,7 +317,7 @@ class DoubanRobot:
                             break
                 retry_time = retry_time + 1
                 if retry_time >= 3:
-                    raise Exception('/login wait break:%s'%retry_time)
+                    raise Exception('login wait break:%s'%retry_time)
         else:
             vcode = self.captcha.captcha_juhe(imgurl)
             logging.info('captcha_juhe get captcha:%s', vcode)
@@ -325,24 +329,28 @@ class DoubanRobot:
                 #没有，重新进入mail captcha流程
                 return self.identify_code_check(r, post_url, post_data)
 
-        if 'misc/sorry' in r.url:
+        if 'misc/sorry' in r.url and vcode:
             post_data2 = {}
             post_data2['ck'] = self.ck
             post_data2["captcha-solution"] = vcode
             post_data2["captcha-id"] = captcha_id
             post_data2['original-url'] = "https://www.douban.com/"
             r = self.session.post(r.url, data=post_data2, cookies=self.session.cookies.get_dict())
-        else:
+        elif vcode:
             post_data["captcha-solution"] = vcode
             post_data["captcha-id"] = captcha_id
             r = self.session.post(post_url, data=post_data, cookies=self.session.cookies.get_dict())
 
         if '验证码错误' in r.text:
             self.save_captcha(imgurl)
+        else:
+            #成功了
+            self.mail_fail = 0
 
         save_html('identify.html',r.text)
 
         logging.info('captcha solution:%s, id:%s, url:%s', vcode, captcha_id, r.url)
+        #重新检查一次， 若发现还是不行，就，递归
         r = self.identify_code_check(r, post_url, post_data)
 
         return r
@@ -390,6 +398,7 @@ class DoubanRobot:
         topics_list = re.findall(r'<a href="https://www.douban.com/group/topic/([0-9]+)/', r)
         return topics_list
 
+    # 发新帖子
     def new_topic(self, group_id, title, content='Post by python'):
         '''
         use the ck pulish a new topic on the douban group.
@@ -421,6 +430,7 @@ class DoubanRobot:
             return True
         return False
 
+    # 发豆瓣的说说
     def talk_status(self, content='Hello.it\'s a test message using python.'):
         '''
         talk a status.
@@ -441,6 +451,7 @@ class DoubanRobot:
             logging.info('Okay, talk_status: "%s" post successfully !'%content)
             return True
 
+    # 广播邮件
     def broadcast_mail(self, m_text, page_num=0):
         '''
         doumail topics
@@ -463,6 +474,7 @@ class DoubanRobot:
 
             self.send_mail(uid, m_text)
 
+    # 处理未读邮件
     def answer_unread_mail(self, unread=True):
         '''
         doumail topics
@@ -478,7 +490,7 @@ class DoubanRobot:
             raise Exception('login check fail, need login again!')
 
         mail_nums = 0
-        # save_html('unread_mail.html', r.text)
+        save_html('unread_mail.html', r.text)
         html = etree.HTML(r.text)
         from_uid = html.xpath("//div[@class='doumail-list']/ul/li[@class='state-unread']/div[@class='select']/input[@type='checkbox']/@value")
         from_name = html.xpath("//div[@class='doumail-list']/ul/li[@class='state-unread']/div[@class='title']/div[@class='sender']/span[@class='from']/text()")
@@ -522,6 +534,7 @@ class DoubanRobot:
 
         return mail_nums
 
+    # 回复邮件
     def answer_mail(self, uid):
         msg_id = 0
         if uid in self.doumail_dic:
@@ -533,9 +546,8 @@ class DoubanRobot:
 
         #first mail
         if msg_id == 0:
-            chat_msg = u'夏文表妹是机器人，如果她在你发的帖下打扰到你，请允许我在这里向你道歉。\n\r  假如你觉得表妹挺有意思的话，不妨多和她聊聊呗。\n\r  豆瓣的接口限制了访问频率，邮件回复可能没办法太快，请多多包涵。\n\r最近受人所托推广一个靠谱小组的微信群：https://www.douban.com/group/topic/114719268/。 \n\r很自由的交(xiang)友(qin)群，无权利无义务。\n\r在里面潜水挺有意思的。\n\r有兴趣不妨看一下。\n\r'
+            chat_msg = u'夏文表妹是机器人，如果她在你发的帖下打扰到你，请允许我在这里向你道歉。回复"夏文二狗"可以获得我联系方式，想要让表妹帮顶贴，想要磁力链接网址，喜欢骑行都可以找我。\n\r代码暂时不公开、机器人不卖、想要做爬虫的同学可以去猪八戒网看看。\n\r\n\r  假如你觉得表妹挺有意思的话，不妨多和她聊聊。\n\r  豆瓣的接口限制了访问频率，邮件回复可能没办法太快，请多多包涵。\n\r'
             send_res = self.send_mail(uid, chat_msg)
-
 
         if not self.ck:
             logging.error('ck is invalid!')
@@ -588,11 +600,13 @@ class DoubanRobot:
                     continue 
 
                 #普通聊天消息
-                if '网站链接' in msg or '网站地址' in msg or '磁力链接' in msg:
+                if '网站链接' in msg or '网站地址' in msg or '磁力链接' in msg or '地址' in msg:
                     chat_msg = '番茄小说: http://tomatow.top/novel. \n\r磁力搜索网站链接: http://tomatow.top/magnetic , 请用电脑打开(如chorme浏览器),下载需要安装迅雷、torrent(磁力链接下载);\n\r可以的话，不妨关注一下。:)\n\r假如电影的话，推荐“至暗时刻”，记录片的“蓝色星球”也不错。小电影的话，关键字可以是“学妹、合集、小美女"等等，看你个人偏好吧。 如果有什么建议，不妨留言回复一下 :)\n\r'
                 elif "蒸" in msg or "征" in msg:
                     content = ['好看的皮囊三千一晚，有趣的灵魂要房要车。', '选我！选我！', '"别找了找不到的，你还在想些什么"', '除了有趣，还有什么别的具体要求吗']
                     chat_msg = random.choice(content)
+                elif '夏文二狗' in msg:
+                    chat_msg = '表妹不够智能，如果回复让你误会了， 请让我先道歉。\n\r可以加我微信,"iamxiaomaomao", 我一定给你个满意答复。'
                 else:
                     chat_msg = self.get_chat(msg, uid)
 
@@ -616,6 +630,7 @@ class DoubanRobot:
             self.redis.set('mail:%s'%(uid), int(max_id))
         return True
 
+    # 主动向某个uid发邮件
     def send_mail(self, uid, content = '测试豆油，keep moving!'):
         '''
         send a doumail to other.
@@ -674,6 +689,7 @@ class DoubanRobot:
         return True
 
 
+    # 顶贴
     #topics_list = app.get_my_topics()
     #app.topics_up(topics_list)
     def topics_up(self,
@@ -725,6 +741,7 @@ class DoubanRobot:
             time.sleep(5*60)  # Wait a minute to up next topic, You can modify it to delay longer time
         return True
 
+    # 删帖子上自己的发言
     def delete_comment(self, topic_id):
         if not self.ck:
             logging.error('ck is invalid!')
@@ -760,6 +777,7 @@ class DoubanRobot:
 
         return True
 
+    # 开新线程，去查看有没沙发需要顶
     def sofa_monitor(self, session, group_id):
 
         group_url = "https://www.douban.com/group/" + group_id +"/#topics"
@@ -838,16 +856,17 @@ class DoubanRobot:
             try:
                 r=self.identify_code_check(r, post_url, post_data)
             except Exception as e:
-                logging.error('new_topic identify err:%s!'%(e))
+                logging.error('sofa identify err:%s!'%(e))
                 return sofa_time
 
             if r.status_code == 200:
                 self.redis.set('sofa:%s'%topic_id, uid)
                 logging.info('[sofa],https://www.douban.com/group/topic/%s:"%s" successfully!'%(topic_id, chat_msg))
             else:
-                #save_html('topic_%s.html'%(topic_id), r.text)
                 self.sofa_dic[topic_id] = False
-                logging.error('sofa fail, topic id:%s', topic_id)
+
+                logging.error('sofa fail, topic id:%s, sleep 180s', topic_id)
+                time.sleep(1800)
 
             sofa_time = sofa_time + 1
             #避免sofa_time一直是4
@@ -866,8 +885,11 @@ class DoubanRobot:
         post_url = "https://www.douban.com/notification/"
         self.session.headers["Referer"] = post_url
         r = self.session.get(post_url, cookies=self.session.cookies.get_dict())
-        if r'登录豆瓣' in r.text:
-            raise Exception('login check fail, need login again!')
+        if r'登录豆瓣' in r.text or '检测到有异常请求从你的 IP 发出' in r.text:
+            logging.info('login check, need login again!')
+            self.login()
+            return 0
+            #raise Exception('login check fail, need login again!')
         #save_html('notifycation.html', r.text)
 
         notifys = re.findall(r'<div id="reply_notify_(\d*)" class="item-req ">.*?<a href="https://www.douban.com/group/topic/(\d*)/\?start=(\d*)#(\d*)" target="_blank">(.*?)</a>(.*?)\n', r.text, re.DOTALL)
@@ -966,7 +988,7 @@ class DoubanRobot:
             try:
                 r=self.identify_code_check(r, post_url2, post_data)
             except Exception as e:
-                logging.error('new_topic identify err:%s!'%(e))
+                logging.error('answer_notify identify err:%s!'%(e))
                 return False
 
             if r.status_code == 200:
@@ -974,7 +996,7 @@ class DoubanRobot:
                 self.notify_dic[notify_id] = True
                 logging.info('Okay, [%s] uid:%s, content:%s, notify:"%s" successfully!'%(post_url, uid, content, chat_msg))
             else:
-                logging.error('notify fail, topic id:%s', notify_id)
+                logging.error('notify fail, topic id:%s', topic_id)
         else:
             self.notify_dic[notify_id] = True
             return False
@@ -1051,7 +1073,8 @@ def monitor_work(douban, circle_num):
         try:
             qsize = douban.sofa_qsize()
 
-            sofa_group = ['gz', 'GuangZhoulove', '596537', '613361', 'liveinguangzhou']
+            sofa_group = ['GuangZhoulove', '596537', '613361', 'liveinguangzhou']
+            #sofa_group.append('gz')
             sofa_num = 0
             for group_id in sofa_group:
                 size = douban.sofa_monitor(session, group_id)
@@ -1087,8 +1110,9 @@ def monitor_work(douban, circle_num):
 
 def work(hotReload=False):
     global circle_times
-    account_id =  '15989010132'    # your account no (E-mail or phone number)
-    password   =  'douban214008'    # your account password
+    account_id =  '13533092312'    # your account no (E-mail or phone number)
+    #password   =  'adder911002'    # your account password
+    password   =  'mao12345678'    # your account password
     douban_id  =  '161638302'    # your id number
 
     douban = DoubanRobot(account_id, password, douban_id, hotReload=hotReload)
@@ -1098,15 +1122,27 @@ def work(hotReload=False):
     while True:
         try:
             #循环处理多少次
+            #times_unread_mail, times_unread_notify, times_sofa = 5, 3, 3
+            # 2018/10/25 发现回复消息可能会导致封禁(无法避免，每次都是凌晨4.30封禁，应该是豆瓣有跑检查发帖数量来判断的逻辑)， 只开邮件和沙发功能
             times_unread_mail, times_unread_notify, times_sofa = 5, 3, 3
             while times_unread_mail > 0 or times_unread_notify > 0 or times_sofa > 0:
                 if times_unread_mail > 0:
                     len_mail = douban.answer_unread_mail()
                     logging.info('get_mail[%s]:%s', times_unread_mail, len_mail)
                     if len_mail == 0:
-                        times_unread_mail = 0
+                        times_unread_mail = times_unread_mail - 3
                     else:
                         times_unread_mail = times_unread_mail - 1
+
+                #有豆油时，优先豆油(最后一次还是处理一下notify， sofa那些)
+                if len_mail > 0 and times_unread_mail > 0:
+                    times_unread_notify = times_unread_notify - 1
+                    times_sofa = times_sofa - 1
+
+                    logging.info("work, give priority to mail answer, sleep 30's, unread_time:%s", times_unread_mail)
+                    time.sleep(len_mail*15)
+
+                    continue
   
                 if times_unread_notify > 0:
                     len_notify = douban.answer_unread_notify()
@@ -1118,7 +1154,7 @@ def work(hotReload=False):
 
                 if len_mail > 0 or len_notify > 0 :
                     logging.info("mail:%s, notify:%s, sleep 60's", len_mail, len_notify)
-                    time.sleep(60)
+                    time.sleep(len_mail*15+len_notify*15)
 
                 if times_sofa > 0:
                     len_sofa = douban.sofa(4)
@@ -1128,7 +1164,7 @@ def work(hotReload=False):
                         times_sofa = times_sofa - 1
                     if len_sofa > 0:
                         logging.info("get_sofa[%s]:times:%s, sleep 60's", times_sofa, len_sofa)
-                        time.sleep(60)
+                        time.sleep(len_sofa*15)
 
                 logging.info('---- while')
 
@@ -1152,13 +1188,13 @@ def work(hotReload=False):
             circle_times = circle_times + 1
             tt.join()
 
-            if 'Remote end closed connection without response' in traceback.format_exc():
+            if 'Remote end closed connection without response' in traceback.format_exc() or 'Connection reset by peer' in traceback.format_exc():
                 time.sleep(10*60)
                 logging.info("Remote and closed connection, try reconnect after 10*60's")
                 douban = DoubanRobot(account_id, password, douban_id, hotReload=True)
             else:
                 time.sleep(15*60)
-                douban = DoubanRobot(account_id, password, douban_id)
+                douban = DoubanRobot(account_id, password, douban_id, hotReload=True)
 
             tt = threading.Thread(target=monitor_work, args=(douban, circle_times))
             tt.start()

@@ -78,7 +78,8 @@ class chat_turi():
         try:
             post_data = {'info':info, 'key':self.api_key, 'userid':userid}
             r = self.session.post(u'http://www.tuling123.com/openapi/api', data=post_data, cookies=self.session.cookies.get_dict())
-            dic_res = json.loads(r.text)
+            #dic_res = json.loads(r.text)
+            dic_res = r.json()
             if not dic_res or (dic_res['code'] != 100000 and dic_res['code']!=200000 and dic_res['code']!=302000 and dic_res['code'] != 40002):
                 self.api_key = self.appkey_turi.get_next_appkey()
 
