@@ -149,6 +149,10 @@ class DoubanRobot:
         elif self.load_cookies():
             self.get_ck(None)
 
+    def __del__(self):
+        # redis captcha_id 重置
+        self.redis.delete('captcha')
+
     def get_chat(self, msg, uid):
         if '表妹' in msg or '夏文' in msg:
             if msg == '表妹' or msg == '夏文':
@@ -267,7 +271,8 @@ class DoubanRobot:
         #reidentify 防止同一个验证码，一直处理不了的情况(captcha_juhe返回None时会重新进identify_code_check, 用时间来判断是不是同一个的)
         reidentify = self.captcha_last and time.time() - self.captcha_last < 1
         #识别验证码失败， 或者触发了豆瓣登陆校验逻辑
-        if r'/login' in post_url or reidentify:
+        #if r'/login' in post_url or reidentify:
+        if self.mail_fail >= 3 or reidentify:
             interval = int(time.time() - self.mail_interval)
             logging.info('captcha mail_interval:%s',  interval)
 
@@ -329,16 +334,30 @@ class DoubanRobot:
                 #没有，重新进入mail captcha流程
                 return self.identify_code_check(r, post_url, post_data)
 
+        # 登录的自动校验，vcode长度太长的直接放弃
+        if 'login' in r.url and len(vcode) > 8:
+            vcode = None
+
         if 'misc/sorry' in r.url and vcode:
             post_data2 = {}
+            post_data2["form_email"] = self.account_id
+            post_data2["form_password"] = self.password
             post_data2['ck'] = self.ck
             post_data2["captcha-solution"] = vcode
             post_data2["captcha-id"] = captcha_id
             post_data2['original-url'] = "https://www.douban.com/"
             r = self.session.post(r.url, data=post_data2, cookies=self.session.cookies.get_dict())
         elif vcode:
+            if 'login' in r.url or 'account' in r.url:
+                post_data["source"] = "index_nav"
+                post_data["remember"] = 'on'
+                post_data["user_login"] = '登录'
+                post_data["form_email"] = self.account_id
+                post_data["form_password"] = self.password
             post_data["captcha-solution"] = vcode
             post_data["captcha-id"] = captcha_id
+            if 'accounts.douban.com' in r.url:
+                post_url = r.url
             r = self.session.post(post_url, data=post_data, cookies=self.session.cookies.get_dict())
 
         if '验证码错误' in r.text:
@@ -546,7 +565,7 @@ class DoubanRobot:
 
         #first mail
         if msg_id == 0:
-            chat_msg = u'夏文表妹是机器人，如果她在你发的帖下打扰到你，请允许我在这里向你道歉。回复"夏文二狗"可以获得我联系方式，想要让表妹帮顶贴，想要磁力链接网址，喜欢骑行都可以找我。\n\r代码暂时不公开、机器人不卖、想要做爬虫的同学可以去猪八戒网看看。\n\r\n\r  假如你觉得表妹挺有意思的话，不妨多和她聊聊。\n\r  豆瓣的接口限制了访问频率，邮件回复可能没办法太快，请多多包涵。\n\r'
+            chat_msg = u'夏文表妹是机器人，如果她在你发的帖下打扰到你，请允许我在这里向你道歉。回复"夏文二狗"可以获得我联系方式，想要让表妹帮顶贴，想要磁力链接网址，喜欢骑行都可以找我。\n\r代码暂时不公开、机器人不卖、想要做爬虫的同学可以去猪八戒网看看。\n\r\n\r  假如你觉得表妹挺有意思的话，不妨多和她聊聊。\n\r  豆瓣的接口限制了访问频率，邮件回复可能没办法太快，请多多包涵。\n\r  假如表妹没有回复你邮件，可能有豆瓣的验证码表妹自己无法解决， 有时间请帮表妹处理一下: http://magnic.top:9903/'
             send_res = self.send_mail(uid, chat_msg)
 
         if not self.ck:
@@ -600,7 +619,7 @@ class DoubanRobot:
                     continue 
 
                 #普通聊天消息
-                if '网站链接' in msg or '网站地址' in msg or '磁力链接' in msg or '地址' in msg:
+                if '网站' in msg or '磁力链接' in msg or '地址' in msg:
                     chat_msg = '番茄小说: http://tomatow.top/novel. \n\r磁力搜索网站链接: http://tomatow.top/magnetic , 请用电脑打开(如chorme浏览器),下载需要安装迅雷、torrent(磁力链接下载);\n\r可以的话，不妨关注一下。:)\n\r假如电影的话，推荐“至暗时刻”，记录片的“蓝色星球”也不错。小电影的话，关键字可以是“学妹、合集、小美女"等等，看你个人偏好吧。 如果有什么建议，不妨留言回复一下 :)\n\r'
                 elif "蒸" in msg or "征" in msg:
                     content = ['好看的皮囊三千一晚，有趣的灵魂要房要车。', '选我！选我！', '"别找了找不到的，你还在想些什么"', '除了有趣，还有什么别的具体要求吗']
@@ -850,7 +869,6 @@ class DoubanRobot:
                     "submit_btn" : "加上去"
                     }
             r = self.session.post(post_url, post_data, cookies=self.session.cookies.get_dict())
-            #save_html('sofa.html', r.text)
 
             # 验证码
             try:
@@ -862,9 +880,11 @@ class DoubanRobot:
             if r.status_code == 200:
                 self.redis.set('sofa:%s'%topic_id, uid)
                 logging.info('[sofa],https://www.douban.com/group/topic/%s:"%s" successfully!'%(topic_id, chat_msg))
+                save_html('sofa.html', r.text)
             else:
                 self.sofa_dic[topic_id] = False
 
+                save_html('sofa_fail.html', r.text)
                 logging.error('sofa fail, topic id:%s, sleep 180s', topic_id)
                 time.sleep(1800)
 
@@ -989,7 +1009,7 @@ class DoubanRobot:
                 r=self.identify_code_check(r, post_url2, post_data)
             except Exception as e:
                 logging.error('answer_notify identify err:%s!'%(e))
-                return False
+                raise Exception('notify identify fail, try relogin')
 
             if r.status_code == 200:
                 self.redis.set('notify:%s'%notify_id, 1)
@@ -997,6 +1017,7 @@ class DoubanRobot:
                 logging.info('Okay, [%s] uid:%s, content:%s, notify:"%s" successfully!'%(post_url, uid, content, chat_msg))
             else:
                 logging.error('notify fail, topic id:%s', topic_id)
+                raise Exception('notify fail, try relogin')
         else:
             self.notify_dic[notify_id] = True
             return False
@@ -1112,7 +1133,7 @@ def work(hotReload=False):
     global circle_times
     account_id =  '13533092312'    # your account no (E-mail or phone number)
     #password   =  'adder911002'    # your account password
-    password   =  'mao12345678'    # your account password
+    password   =  'MDC10021002'    # your account password
     douban_id  =  '161638302'    # your id number
 
     douban = DoubanRobot(account_id, password, douban_id, hotReload=hotReload)
@@ -1184,6 +1205,7 @@ def work(hotReload=False):
             logging.info('==== work')
         except Exception as e:
             logging.error("daily work raise exception:%s, sleep 15*60's",traceback.format_exc())
+            douban = None
 
             circle_times = circle_times + 1
             tt.join()
@@ -1194,7 +1216,7 @@ def work(hotReload=False):
                 douban = DoubanRobot(account_id, password, douban_id, hotReload=True)
             else:
                 time.sleep(15*60)
-                douban = DoubanRobot(account_id, password, douban_id, hotReload=True)
+                douban = DoubanRobot(account_id, password, douban_id, hotReload=False)
 
             tt = threading.Thread(target=monitor_work, args=(douban, circle_times))
             tt.start()
