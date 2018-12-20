@@ -244,3 +244,8 @@ grass
 machine
 
 month
+
+birth
+fertile
+hello
+户外

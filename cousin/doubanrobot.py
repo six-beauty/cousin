@@ -33,7 +33,7 @@ import email.utils
 
 
 # 验证码通知模块，当自动检测验证码不成功n次(或登录验证码)，会发邮件通知， 人工处理
-class captcha_mail:
+class captcha_mail(object):
     def __init__(self, addr=None):
         self.from_addr = 'sanyue9394@aliyun.com'
         self.from_passwd = 'sanyue214008'
@@ -89,7 +89,7 @@ self_mail = []
 #self topics不回复
 my_topics = [106547648,111516608, 112933822, 112932149, 112933816, 112933934, 113515127, 113515502]
 #ignore topics
-ignore_topics = [106547305, 106547516, 106551311, 113673437, 103217103, 63920532, 154616682]
+ignore_topics = [106547305, 106547516, 106551311, 113673437, 103217103, 63920532, 154616682, 188712473]
 
 #不回复的豆瓣id
 ignore_topic_douban_id = [102393339, 167730677, 168373780]
@@ -322,7 +322,7 @@ class DoubanRobot:
                             break
                 retry_time = retry_time + 1
                 if retry_time >= 3:
-                    raise Exception('login wait break:%s'%retry_time)
+                    raise Exception('identify  wait break:%s'%retry_time)
         else:
             vcode = self.captcha.captcha_juhe(imgurl)
             logging.info('captcha_juhe get captcha:%s', vcode)
@@ -335,7 +335,7 @@ class DoubanRobot:
                 return self.identify_code_check(r, post_url, post_data)
 
         # 登录的自动校验，vcode长度太长的直接放弃
-        if 'login' in r.url and len(vcode) > 8:
+        if 'login' in r.url and (len(vcode) > 8 or len(vcode) <= 4):
             vcode = None
 
         if 'misc/sorry' in r.url and vcode:
@@ -870,6 +870,11 @@ class DoubanRobot:
                     }
             r = self.session.post(post_url, post_data, cookies=self.session.cookies.get_dict())
 
+            if r'登录豆瓣' in r.text or '检测到有异常请求从你的 IP 发出' in r.text:
+                logging.info('login check, need login again!')
+                self.login()
+                return sofa_time
+
             # 验证码
             try:
                 r=self.identify_code_check(r, post_url, post_data)
@@ -881,6 +886,9 @@ class DoubanRobot:
                 self.redis.set('sofa:%s'%topic_id, uid)
                 logging.info('[sofa],https://www.douban.com/group/topic/%s:"%s" successfully!'%(topic_id, chat_msg))
                 save_html('sofa.html', r.text)
+            elif '页面不存在' in r.text:
+                #删帖了
+                self.sofa_dic[topic_id] = True
             else:
                 self.sofa_dic[topic_id] = False
 
@@ -1016,8 +1024,10 @@ class DoubanRobot:
                 self.notify_dic[notify_id] = True
                 logging.info('Okay, [%s] uid:%s, content:%s, notify:"%s" successfully!'%(post_url, uid, content, chat_msg))
             else:
+                save_html('notify_fail.html', r.text)
                 logging.error('notify fail, topic id:%s', topic_id)
-                raise Exception('notify fail, try relogin')
+                if '没有访问权限' not in r.text:
+                    raise Exception('notify fail, try relogin')
         else:
             self.notify_dic[notify_id] = True
             return False
@@ -1133,7 +1143,7 @@ def work(hotReload=False):
     global circle_times
     account_id =  '13533092312'    # your account no (E-mail or phone number)
     #password   =  'adder911002'    # your account password
-    password   =  'MDC10021002'    # your account password
+    password   =  'MDC911002adder'    # your account password
     douban_id  =  '161638302'    # your id number
 
     douban = DoubanRobot(account_id, password, douban_id, hotReload=hotReload)
@@ -1166,7 +1176,8 @@ def work(hotReload=False):
                     continue
   
                 if times_unread_notify > 0:
-                    len_notify = douban.answer_unread_notify()
+                    len_notify = 0
+                    #len_notify = douban.answer_unread_notify()
                     logging.info('get_notify[%s]:%s', times_unread_notify, len_notify)
                     if len_notify == 0:
                         times_unread_notify = 0
@@ -1214,9 +1225,12 @@ def work(hotReload=False):
                 time.sleep(10*60)
                 logging.info("Remote and closed connection, try reconnect after 10*60's")
                 douban = DoubanRobot(account_id, password, douban_id, hotReload=True)
-            else:
+            elif 'try relogin1' in traceback.format_exc():
                 time.sleep(15*60)
                 douban = DoubanRobot(account_id, password, douban_id, hotReload=False)
+            else:
+                time.sleep(15*60)
+                douban = DoubanRobot(account_id, password, douban_id, hotReload=True)
 
             tt = threading.Thread(target=monitor_work, args=(douban, circle_times))
             tt.start()
