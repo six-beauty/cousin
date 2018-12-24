@@ -886,7 +886,7 @@ class DoubanRobot:
                 self.redis.set('sofa:%s'%topic_id, uid)
                 logging.info('[sofa],https://www.douban.com/group/topic/%s:"%s" successfully!'%(topic_id, chat_msg))
                 save_html('sofa.html', r.text)
-            elif '页面不存在' in r.text:
+            elif '页面不存在' in r.text or '您已被禁言' in r.text:
                 #删帖了
                 self.sofa_dic[topic_id] = True
             else:
@@ -1143,12 +1143,15 @@ def work(hotReload=False):
     global circle_times
     account_id =  '13533092312'    # your account no (E-mail or phone number)
     #password   =  'adder911002'    # your account password
-    password   =  'MDC911002adder'    # your account password
+    password   =  'ADDER1002mdc'    # your account password
     douban_id  =  '161638302'    # your id number
 
     douban = DoubanRobot(account_id, password, douban_id, hotReload=hotReload)
     tt = threading.Thread(target=monitor_work, args=(douban, circle_times))
     tt.start()
+
+    #等待 monitor线程
+    time.sleep(3)
 
     while True:
         try:
